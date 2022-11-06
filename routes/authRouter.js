@@ -8,48 +8,58 @@ router.post("/login", async (req, res) => {
     if (!req.body.email || !req.body.password) {
         return res.status(400).json("Error: All User fields must be filled out")
     }
-    const user = await User.findOne({
-        email: req.body.email
-    })
 
-    if (!user) {
-        return res.status(400).json("Error: User does not exist")
+    try {
+        const user = await User.findOne({
+            email: req.body.email
+        })
+
+        if (!user) {
+            return res.status(400).json("Error: User does not exist")
+        }
+
+        passwordsMatch = await bcrypt.compare(req.body.password, user.password)
+        if (!passwordsMatch) {
+            return res.status(401).json("Error: Invalid credentials")
+        }
+
+        const token = jwt.sign({ _id: user._id }, process.env.SECRET_TOKEN)
+
+        res.setHeader("auth-token", token).json(token)
+    } catch(err) {
+        return res.status(500).json("Error: Unexpected error encountered")
     }
-
-    passwordsMatch = await bcrypt.compare(req.body.password, user.password)
-    if (!passwordsMatch) {
-        return res.status(401).json("Error: Invalid credentials")
-    }
-
-    const token = jwt.sign({_id: user._id}, process.env.SECRET_TOKEN)
-    
-    res.setHeader("auth-token", token).json(token)
 })
 
 router.post("/register", async (req, res) => {
     if (!req.body.email || !req.body.password || !req.body.username) {
         return res.status(400).json("Error: All User fields must be filled out")
     }
-    const emailExists = await User.findOne({email: req.body.email})
-    if (emailExists) {
-        return res.status(400).json("Error: User with this email already exists")
+
+    try {
+        const emailExists = await User.findOne({ email: req.body.email })
+        if (emailExists) {
+            return res.status(400).json("Error: User with this email already exists")
+        }
+
+        const usernameExists = await User.findOne({ username: req.body.username })
+        if (usernameExists) {
+            return res.status(400).json("Error: User with this username already exists")
+        }
+
+
+        const hashedPassword = await bcrypt.hash(req.body.password, 10)
+        const user = new User({
+            email: req.body.email,
+            password: hashedPassword,
+            username: req.body.username
+        })
+
+        const savedUser = await user.save()
+        res.status(201).json({ user_id: savedUser._id })
+    } catch (err) {
+        res.status(500).json("Error: Unexpected error encountered")
     }
-
-    const usernameExists = await User.findOne({username: req.body.username})
-    if (usernameExists) {
-        return res.status(400).json("Error: User with this username already exists")
-    }
-    
-
-    const hashedPassword = await bcrypt.hash(req.body.password, 10)
-    const user = new User({
-        email: req.body.email,
-        password: hashedPassword,
-        username: req.body.username
-    })
-
-    const savedUser = await user.save()
-    res.status(201).json({user_id: savedUser._id})
 })
 
 router.get("/checkauth", async (req, res) => {
