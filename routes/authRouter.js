@@ -27,10 +27,7 @@ router.post("/login", async (req, res) => {
 
         res.setHeader("auth-token", token).json(token)
     } catch(err) {
-        res.status(500).json({
-            message: "Error: Unexpected error encountered",
-            details: err
-        })
+        res.status(500).json("Error: Unexpected error encountered")
     }
 })
 
@@ -61,10 +58,7 @@ router.post("/register", async (req, res) => {
         const savedUser = await user.save()
         res.status(201).json({ user_id: savedUser._id })
     } catch (err) {
-        res.status(500).json({
-            message: "Error: Unexpected error encountered",
-            details: err
-        })
+        res.status(500).json("Error: Unexpected error encountered")
     }
 })
 
