@@ -18,6 +18,7 @@ mongoose.connect(process.env.DATABASE_URL)
     })
     .catch(err => {
         console.error(`Error connecting to MongoDB: ${err}`)
+        process.exitCode = 1
     })
 
 // Routes

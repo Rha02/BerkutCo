@@ -3,10 +3,13 @@ const router = express.Router()
 const User = require("../models/user")
 const bcrypt = require("bcrypt")
 const jwt = require('jsonwebtoken')
+const { validationResult, checkSchema } = require("express-validator")
+const {loginSchema, registerSchema} = require('../middleware/authSchema')
 
-router.post("/login", async (req, res) => {
-    if (!req.body.email || !req.body.password) {
-        return res.status(400).json("Error: All User fields must be filled out")
+router.post("/login", checkSchema(loginSchema), async (req, res) => {
+    const errors = validationResult(req)
+    if (!errors.isEmpty()) {
+        return res.status(400).json({errors: errors.array()})
     }
 
     try {
@@ -31,9 +34,10 @@ router.post("/login", async (req, res) => {
     }
 })
 
-router.post("/register", async (req, res) => {
-    if (!req.body.email || !req.body.password || !req.body.username) {
-        return res.status(400).json("Error: All User fields must be filled out")
+router.post("/register", checkSchema(registerSchema), async (req, res) => {
+    const errors = validationResult(req)
+    if (!errors.isEmpty()) {
+        return res.status(400).json(errors.array())
     }
 
     try {
