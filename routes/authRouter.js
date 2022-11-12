@@ -28,7 +28,7 @@ router.post("/login", checkSchema(loginSchema), async (req, res) => {
 
         const token = jwt.sign({ _id: user._id }, process.env.SECRET_TOKEN)
 
-        res.setHeader("auth-token", token).json(token)
+        res.setHeader("Authorization", token).json(token)
     } catch(err) {
         res.status(500).json("Error: Unexpected error encountered")
     }
@@ -51,7 +51,6 @@ router.post("/register", checkSchema(registerSchema), async (req, res) => {
             return res.status(400).json("Error: User with this username already exists")
         }
 
-
         const hashedPassword = await bcrypt.hash(req.body.password, 10)
         const user = new User({
             email: req.body.email,
@@ -67,10 +66,12 @@ router.post("/register", checkSchema(registerSchema), async (req, res) => {
 })
 
 router.get("/checkauth", async (req, res) => {
-    const token = req.header('auth-token')
+    const token = req.header('Authorization')
     if (!token) {
         return res.status(401).json("Error: Unauthenticated")
     }
+
+    console.log(token)
 
     let u = undefined
     try {
