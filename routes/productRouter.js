@@ -8,8 +8,13 @@ const productSchema = require('../middleware/productSchema')
 
 router.route('/')
     .get(async (req, res) => {
+        limit = req.query.limit ? Math.min(req.query.limit, 500) : 100
+        skip = req.query.skip ? req.query.skip : 0
+
+        console.log(limit)
+
         try {
-            products = await Product.find()
+            products = await Product.find().sort({createdAt: -1}).skip(skip).limit(limit)
             res.json(products)
         } catch(err) {
             console.log(err)
