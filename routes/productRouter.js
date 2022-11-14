@@ -168,7 +168,7 @@ router.route('/:id')
             }
 
             await Product.deleteOne({_id: product._id})
-
+            
             return res.json({
                 msg: "Product successfully deleted!",
                 errors: []

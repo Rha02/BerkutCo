@@ -33,7 +33,7 @@ router.post("/login", checkSchema(loginSchema), async (req, res) => {
         }
 
         const token = jwt.sign({ _id: user._id }, process.env.SECRET_TOKEN)
-
+        
         res.setHeader("Authorization", token).json({
             errors: []
         })
@@ -88,6 +88,8 @@ router.get("/checkauth", async (req, res) => {
             errors: [{ msg: "Unauthenticated" }]
         })
     }
+
+    console.log(token)
 
     let u = undefined
     try {
