@@ -16,30 +16,38 @@ router.route('/')
             products = await Product.find().sort({createdAt: -1}).skip(skip).limit(limit)
             res.json(products)
         } catch(err) {
-            res.status(http.StatusInternalServerError).json("Error: Unexpected error encountered")
+            res.status(http.statusInternalServerError).json({
+                errors: [{ msg: "Unexpected error encountered" }]
+            })
         }
     })
     .post(checkSchema(productSchema), async (req, res) => {
         const errors = validationResult(req)
         if (!errors.isEmpty()) {
-            return res.status(http.StatusBadRequest).json({ errors: errors.array() })
+            return res.status(http.statusBadRequest).json({ errors: errors.array() })
         }
 
         const token = req.header('Authorization')
         if (!token) {
-            return res.status(http.StatusUnauthorized).json("Error: Unauthenticated")
+            return res.status(http.statusUnauthorized).json({
+                errors: [{ msg: "Unauthenticated" }]
+            })
         }
 
         let u = undefined
         try {
             u = jwt.verify(token, process.env.SECRET_TOKEN)
         } catch (err) {
-            return res.status(http.StatusUnauthorized).json("Error: Invalid Authentication Token")
+            return res.status(http.statusUnauthorized).json({
+                errors: [{ msg: "Invalid authentication token" }]
+            })
         }
 
         const user = await User.findOne({_id: u._id})
         if (!user) {
-            return res.status(http.StatusBadRequest).json("Error: Authenticated User not found")
+            return res.status(http.statusBadRequest).json({
+                errors: [{ msg: "Invalid authentication token" }]
+            })
         }
 
         try {
@@ -51,9 +59,11 @@ router.route('/')
             })
 
             const savedProduct = await product.save()
-            res.status(http.StatusCreated).json(savedProduct)
+            res.status(http.statusCreated).json(savedProduct)
         } catch(err) {
-            res.status(http.StatusInternalServerError).json("Error: Unexpected error encountered")
+            res.status(http.statusInternalServerError).json({
+                errors: [{ msg: "Unexpected error encountered" }]
+            })
         }
     })
 
@@ -62,39 +72,51 @@ router.route('/:id')
         try {
             const product = await Product.findOne({ _id: req.params.id })
             if (!product) {
-                return res.status(http.StatusNotFound).json("Error: Product not found")
+                return res.status(http.statusNotFound).json({
+                    errors: [{ msg: "Product not found" }]
+                })
             }
             return res.json(product)
         } catch(err) {
-            return res.status(http.StatusInternalServerError).json("Error: Unexpected error encountered")
+            return res.status(http.statusInternalServerError).json({
+                errors: [{ msg: "Unexpected error encountered" }]
+            })
         }
     })
     .put(checkSchema(productSchema), async (req, res) => {
         const errors = validationResult(req)
         if (!errors.isEmpty()) {
-            return res.status(http.StatusBadRequest).json({ errors: errors.array() })
+            return res.status(http.statusBadRequest).json({ errors: errors.array() })
         }
 
         const token = req.header('Authorization')
         if (!token) {
-            return res.status(http.StatusUnauthorized).json('Error: Unauthenticated')
+            return res.status(http.statusUnauthorized).json({
+                errors: [{ msg: "Unauthenticated" }]
+            })
         }
 
         let u = undefined
         try {
             u = jwt.verify(token, process.env.SECRET_TOKEN)
         } catch(err) {
-            return res.status(http.StatusUnauthorized).json("Error: Invalid Authentication Token")
+            return res.status(http.statusUnauthorized).json({
+                errors: [{ msg: "Invalid authentication token" }]
+            })
         }
 
         try {
             let product = await Product.findOne({ _id: req.params.id })
             if (!product) {
-                return res.status(http.StatusNotFound).json("Product not found")
+                return res.status(http.statusNotFound).json({
+                    errors: [{ msg: "Product not found" }]
+                })
             }
 
             if (product.seller != u._id) {
-                return res.status(http.StatusForbidden).json("User is unauthorized to update this product")
+                return res.status(http.statusForbidden).json({
+                    errors: [{ msg: "User is unauthorized to access this resource" }]
+                })
             }
 
             const updatedProduct = {
@@ -108,38 +130,53 @@ router.route('/:id')
                 $set: updatedProduct
             })
 
-            return res.status(http.StatusCreated).json(updatedProduct)
+            return res.status(http.statusCreated).json(updatedProduct)
         } catch(err) {
-            res.status(http.StatusInternalServerError).json("Error: Unexpected error encountered")
+            res.status(http.statusInternalServerError).json({
+                errors: [{ msg: "Unexpected error encountered" }]
+            })
         }
     })
     .delete(async (req, res) => {
         const token = req.header('Authorization')
         if (!token) {
-            return res.status(http.StatusUnauthorized).json("Error: Unauthenticated")
+            return res.status(http.statusUnauthorized).json({
+                errors: [{ msg: "Unauthenticated" }]
+            })
         }
 
         let u = undefined
         try {
             u = jwt.verify(token, process.env.SECRET_TOKEN)
         } catch(err) {
-            return res.status(http.StatusUnauthorized).json("Error: Invalid User Authentication Token")
+            return res.status(http.statusUnauthorized).json({
+                errors: [{ msg: "Invalid authentication token" }]
+            })
         }
 
         try {
             const product = await Product.findOne({ _id: req.params.id })
             if (!product) {
-                return res.status(http.StatusNotFound).json("Product not found")
+                return res.status(http.statusNotFound).json({
+                    errors: [{ msg: "Product not found" }]
+                })
             }
             if (product.seller != u._id) {
-                return res.status(http.StatusForbidden).json("Error: User is unauthorized to delete this product")
+                return res.status(http.statusForbidden).json({
+                    errors: [{ msg: "User is unauthorized to access this resource" }]
+                })
             }
 
             await Product.deleteOne({_id: product._id})
 
-            return res.json("Success")
+            return res.json({
+                msg: "Product successfully deleted!",
+                errors: []
+            })
         } catch(err) {
-            return res.status(http.StatusInternalServerError).json("Error: Unexpected error encountered")
+            return res.status(http.statusInternalServerError).json({
+                errors: [{ msg: "Unexpected error encountered" }]
+            })
         }
     })
 

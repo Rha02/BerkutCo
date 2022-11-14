@@ -1,11 +1,11 @@
 const httpResponses = {
-    StatusOK: 200,
-    StatusCreated: 201,
-    StatusBadRequest: 400,
-    StatusUnauthorized: 401,
-    StatusForbidden: 403,
-    StatusNotFound: 404,
-    StatusInternalServerError: 500,
-    StatusNotImplemented: 501
+    statusOK: 200,
+    statusCreated: 201,
+    statusBadRequest: 400,
+    statusUnauthorized: 401,
+    statusForbidden: 403,
+    statusNotFound: 404,
+    statusInternalServerError: 500,
+    statusNotImplemented: 501
 }
 module.exports = httpResponses
