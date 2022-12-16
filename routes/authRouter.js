@@ -89,8 +89,6 @@ router.get("/checkauth", async (req, res) => {
         })
     }
 
-    console.log(token)
-
     let u = undefined
     try {
         u = jwt.verify(token, process.env.SECRET_TOKEN)
