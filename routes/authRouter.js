@@ -31,8 +31,8 @@ router.post("/login", checkSchema(loginSchema), async (req, res) => {
                 errors: [{ msg: "Invalid credentials" }]
             })
         }
-
-        const token = jwt.sign({ _id: user._id }, process.env.SECRET_TOKEN)
+        
+        const token = jwt.sign({ _id: user._id }, process.env.SECRET_TOKEN, { expiresIn: '7d' })
         
         res.setHeader("Authorization", token).json({
             errors: []
