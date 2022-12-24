@@ -134,9 +134,10 @@ describe("GET /checkauth", () => {
             email: "fake@email.test",
             password: "fake-password"
         })
+        expect(res1.statusCode).toBe(http.statusOK)
 
         const res2 = await request(app).get("/checkauth").set({"Authorization": res1.headers["authorization"]})
-        expect(http.statusOK)
+        expect(res2.statusCode).toBe(http.statusOK)
         expect(res2.body["email"]).toBe("fake@email.test")
         expect(res2.body["username"]).toBe("testuser")
     })

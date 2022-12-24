@@ -130,7 +130,7 @@ router.route('/:id')
                 $set: updatedProduct
             })
 
-            return res.status(http.statusCreated).json(updatedProduct)
+            return res.status(http.statusOK).json(updatedProduct)
         } catch(err) {
             res.status(http.statusInternalServerError).json({
                 errors: [{ msg: "Unexpected error encountered" }]
