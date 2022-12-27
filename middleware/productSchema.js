@@ -1,3 +1,4 @@
+/**productSchema defines a request validation schema for creating or updating products */
 const productSchema = {
     name: {
         isLength: {

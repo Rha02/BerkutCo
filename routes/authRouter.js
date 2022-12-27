@@ -7,7 +7,7 @@ const { validationResult, checkSchema } = require("express-validator")
 const {loginSchema, registerSchema} = require('../middleware/authSchema')
 const http = require("../utils/http")
 
-
+// Login a user on a POST request to "/login"
 router.post("/login", checkSchema(loginSchema), async (req, res) => {
     const errors = validationResult(req)
     if (!errors.isEmpty()) {
@@ -44,6 +44,7 @@ router.post("/login", checkSchema(loginSchema), async (req, res) => {
     }
 })
 
+// Register a user on a POST request to "/register"
 router.post("/register", checkSchema(registerSchema), async (req, res) => {
     const errors = validationResult(req)
     if (!errors.isEmpty()) {
@@ -81,6 +82,7 @@ router.post("/register", checkSchema(registerSchema), async (req, res) => {
     }
 })
 
+// Return the currently signed-in user on a GET request to "/checkauth"
 router.get("/checkauth", async (req, res) => {
     const token = req.header('Authorization')
     if (!token) {

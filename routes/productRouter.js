@@ -7,7 +7,9 @@ const jwt = require('jsonwebtoken')
 const productSchema = require('../middleware/productSchema')
 const http = require('../utils/http')
 
+// Handle requests to "/products"
 router.route('/')
+    // Return a list of products on a GET request to "/products"
     .get(async (req, res) => {
         limit = req.query.limit ? Math.min(req.query.limit, 500) : 100
         skip = req.query.skip ? req.query.skip : 0
@@ -21,6 +23,8 @@ router.route('/')
             })
         }
     })
+
+    // Create a new product on a POST request to "/products"
     .post(checkSchema(productSchema), async (req, res) => {
         const errors = validationResult(req)
         if (!errors.isEmpty()) {
@@ -67,7 +71,9 @@ router.route('/')
         }
     })
 
+// Handle requests to a "/products/:id" where id is the id of the product
 router.route('/:id')
+    // Return a product on a GET request
     .get(async (req, res) => {
         try {
             const product = await Product.findOne({ _id: req.params.id })
@@ -83,6 +89,8 @@ router.route('/:id')
             })
         }
     })
+
+    // Replace an existing product with an updated product on a PUT request
     .put(checkSchema(productSchema), async (req, res) => {
         const errors = validationResult(req)
         if (!errors.isEmpty()) {
@@ -137,6 +145,8 @@ router.route('/:id')
             })
         }
     })
+
+    // Delete a product on a DELETE request
     .delete(async (req, res) => {
         const token = req.header('Authorization')
         if (!token) {
