@@ -21,6 +21,12 @@ const productSchema = {
                 { min: 0, max: 99999.99}
             ]
         }
+    },
+    stock: {
+        isInt: {
+            errorMessage: 'Stock must be at least 1 or more',
+            options: { min: 1 }
+        }
     }
 }
 

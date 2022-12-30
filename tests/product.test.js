@@ -36,7 +36,8 @@ beforeAll(async () => {
         name: "product 1",
         description: "this is product 1",
         price: 10.49,
-        seller: user._id
+        seller: user._id,
+        stock: 10
     })
     await product.save()
 
@@ -44,7 +45,8 @@ beforeAll(async () => {
         name: "product 2",
         description: "this is product 2",
         price: 5.73,
-        seller: user._id
+        seller: user._id,
+        stock: 10
     })
     await product2.save()
 
@@ -52,7 +54,8 @@ beforeAll(async () => {
         name: "product 3",
         description: "this is product 3",
         price: 13.21,
-        seller: user._id
+        seller: user._id,
+        stock: 10
     })
     await product3.save()
 })
@@ -72,29 +75,6 @@ describe("GET /products", () => {
         expect(res.statusCode).toBe(http.statusOK)
         expect(res.body).toHaveLength(3)
         expect(res.body[0].name).toBe("product 3")
-    })
-    
-    test("should get products but skip first product", async () => {
-        const res = await request(app).get("/products?skip=1").expect("Content-Type", /json/)
-        expect(res.statusCode).toBe(http.statusOK)
-        expect(res.body).toHaveLength(2)
-        expect(res.body[0].name).toBe("product 2")
-        expect(res.body[1].name).toBe("product 1")
-    })
-
-    test("should get products but limited to 2 products", async () => {
-        const res = await request(app).get("/products?limit=2").expect("Content-Type", /json/)
-        expect(res.statusCode).toBe(http.statusOK)
-        expect(res.body).toHaveLength(2)
-        expect(res.body[0].name).toBe("product 3")
-        expect(res.body[1].name).toBe("product 2")
-    })
-
-    test("should get products but skipped 1 product and limited to 1 product", async () => {
-        const res = await request(app).get("/products?limit=1&skip=1").expect("Content-Type", /json/)
-        expect(res.statusCode).toBe(http.statusOK)
-        expect(res.body).toHaveLength(1)
-        expect(res.body[0].name).toBe("product 2")
     })
 })
 
@@ -125,10 +105,13 @@ describe("POST /products", () => {
         const res = await request(app).post("/products").set({"Authorization": u.headers["authorization"]}).send({
             name: "product 4",
             description: "this is product 4",
-            price: 20
+            price: 20,
+            stock: 10
         })
         expect(res.statusCode).toBe(http.statusCreated)
         expect(res.body["_id"]).toBeDefined()
+        expect(res.body["name"]).toBe("product 4")
+        expect(res.body["stock"]).toBe(10)
 
         await Product.deleteOne({"_id": res.body["_id"]})
     })
@@ -137,7 +120,8 @@ describe("POST /products", () => {
         const res = await request(app).post("/products").send({
             name: "product 4",
             description: "this is product 4",
-            price: 20
+            price: 20,
+            stock: 10
         })
         expect(res.statusCode).toBe(http.statusUnauthorized)
         expect(res.body["_id"]).toBeUndefined()
@@ -152,7 +136,8 @@ describe("POST /products", () => {
         const res = await request(app).post("/products").set({ "Authorization": u.headers["authorization"] }).send({
             name: "123",
             description: "this is product 4",
-            price: 20
+            price: 20,
+            stock: 10
         })
         expect(res.statusCode).toBe(http.statusBadRequest)
         expect(res.body["_id"]).toBeUndefined()
@@ -167,7 +152,24 @@ describe("POST /products", () => {
         const res = await request(app).post("/products").set({ "Authorization": u.headers["authorization"] }).send({
             name: "product 4",
             description: "this is product 4",
-            price: -1
+            price: -1,
+            stock: 10
+        })
+        expect(res.statusCode).toBe(http.statusBadRequest)
+        expect(res.body["_id"]).toBeUndefined()
+    })
+
+    test("product stock should be at least 1 or more", async () => {
+        const u = await request(app).post("/login").send({
+            email: "john@foo.bar",
+            password: "fake-password"
+        })
+
+        const res = await request(app).post("/products").set({ "Authorization": u.headers["authorization"] }).send({
+            name: "product 4",
+            description: "this is product 4",
+            price: 20,
+            stock: 0
         })
         expect(res.statusCode).toBe(http.statusBadRequest)
         expect(res.body["_id"]).toBeUndefined()
@@ -186,13 +188,15 @@ describe("PUT /products/:id", () => {
         const res = await request(app).put(`/products/${product._id}`).set({ "Authorization": u.headers["authorization"] }).send({
             name: "updated product 1",
             description: "updated description",
-            price: 20.59
+            price: 20.59,
+            stock: 10
         })
 
         expect(res.statusCode).toBe(http.statusOK)
         expect(res.body["name"]).toBe("updated product 1")
         expect(res.body["description"]).toBe("updated description")
         expect(res.body["price"]).toBe(20.59)
+        expect(res.body["stock"]).toBe(10)
     })
 
     test("unauthorized user should fail to update a product", async () => {
@@ -206,7 +210,8 @@ describe("PUT /products/:id", () => {
         const res = await request(app).put(`/products/${product._id}`).set({ "Authorization": u.headers["authorization"]}).send({
             name: "updated product 2",
             description: "updated description",
-            price: 20.59
+            price: 20.59,
+            stock: 10
         })
 
         expect(res.statusCode).toBe(http.statusForbidden)
@@ -224,7 +229,8 @@ describe("PUT /products/:id", () => {
         const res = await request(app).put(`/products/${product._id}`).set({ "Authorization": u.headers["authorization"] }).send({
             name: "123",
             description: "updated description",
-            price: 20.59
+            price: 20.59,
+            stock: 10
         })
 
         expect(res.statusCode).toBe(http.statusBadRequest)
@@ -242,7 +248,27 @@ describe("PUT /products/:id", () => {
         const res = await request(app).put(`/products/${product._id}`).set({ "Authorization": u.headers["authorization"] }).send({
             name: "12345",
             description: "updated description",
-            price: -5
+            price: -5,
+            stock: 10
+        })
+
+        expect(res.statusCode).toBe(http.statusBadRequest)
+        expect(res.body["name"]).toBeUndefined()
+    })
+
+    test("product stock should be at least 1 or more", async () => {
+        const u = await request(app).post("/login").send({
+            email: "john@foo.bar",
+            password: "fake-password"
+        })
+        expect(u.statusCode).toBe(http.statusOK)
+
+        const product = await Product.findOne({ name: "product 2" })
+        const res = await request(app).put(`/products/${product._id}`).set({ "Authorization": u.headers["authorization"] }).send({
+            name: "12345",
+            description: "updated description",
+            price: 25,
+            stock: 0
         })
 
         expect(res.statusCode).toBe(http.statusBadRequest)
@@ -260,7 +286,8 @@ describe("PUT /products/:id", () => {
         const res = await request(app).put(`/products/${id}`).set({ "Authorization": u.headers["authorization"] }).send({
             name: "12345",
             description: "updated description",
-            price: 20.59
+            price: 20.59,
+            stock: 10
         })
 
         expect(res.statusCode).toBe(http.statusNotFound)

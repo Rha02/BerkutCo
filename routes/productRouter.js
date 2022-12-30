@@ -59,7 +59,8 @@ router.route('/')
                 name: req.body.name,
                 description: req.body.description,
                 price: req.body.price,
-                seller: user._id
+                seller: user._id,
+                stock: req.body.stock
             })
 
             const savedProduct = await product.save()
@@ -131,7 +132,8 @@ router.route('/:id')
                 name: req.body.name,
                 description: req.body.description,
                 price: req.body.price,
-                seller: u._id
+                seller: u._id,
+                stock: req.body.stock
             }
 
             await Product.updateOne({_id: product.id}, {

@@ -23,6 +23,11 @@ const productSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',
         required: true
+    },
+    stock: {
+        type: Number,
+        required: true,
+        validate: { validator: Number.isInteger }
     }
 }, {timestamps: true})
 
