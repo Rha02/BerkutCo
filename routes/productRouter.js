@@ -54,12 +54,17 @@ router.route('/')
             })
         }
 
+        if (user.access_level < 2) {
+            return res.status(http.statusForbidden).json({
+                errors: [{ msg: "User is unauthorized to access this resource" }]
+            })
+        }
+
         try {
             const product = new Product({
                 name: req.body.name,
                 description: req.body.description,
                 price: req.body.price,
-                seller: user._id,
                 stock: req.body.stock
             })
 
@@ -114,6 +119,14 @@ router.route('/:id')
             })
         }
 
+        const user = await User.findOne({ _id: u._id })
+
+        if (user.access_level < 2) {
+            return res.status(http.statusForbidden).json({
+                errors: [{ msg: "User is unauthorized to access this resource" }]
+            })
+        }
+
         try {
             let product = await Product.findOne({ _id: req.params.id })
             if (!product) {
@@ -122,17 +135,10 @@ router.route('/:id')
                 })
             }
 
-            if (product.seller != u._id) {
-                return res.status(http.statusForbidden).json({
-                    errors: [{ msg: "User is unauthorized to access this resource" }]
-                })
-            }
-
             const updatedProduct = {
                 name: req.body.name,
                 description: req.body.description,
                 price: req.body.price,
-                seller: u._id,
                 stock: req.body.stock
             }
 
@@ -166,16 +172,19 @@ router.route('/:id')
             })
         }
 
+        const user = await User.findOne({ _id: u._id })
+
+        if (user.access_level < 2) {
+            return res.status(http.statusForbidden).json({
+                errors: [{ msg: "User is unauthorized to access this resource" }]
+            })
+        }
+
         try {
             const product = await Product.findOne({ _id: req.params.id })
             if (!product) {
                 return res.status(http.statusNotFound).json({
                     errors: [{ msg: "Product not found" }]
-                })
-            }
-            if (product.seller != u._id) {
-                return res.status(http.statusForbidden).json({
-                    errors: [{ msg: "User is unauthorized to access this resource" }]
                 })
             }
 

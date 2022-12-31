@@ -6,37 +6,38 @@ const request = require('supertest')
 const http = require('../utils/http')
 const bcrypt = require('bcrypt')
 
+let products = []
+
 beforeAll(async () => {
-    await mongoose.connect(process.env.TEST_DATABASE_URL)
+    await mongoose.connect(process.env.TEST_DATABASE_URL, { serverSelectionTimeoutMS: 2500 })
         .catch(err => {
             console.error(`Error connecting to MongoDB: ${err}`)
             process.exitCode = 1
         })
-
     // Create a test user
-    const hp1 = await bcrypt.hash("fake-password", 10)
-    const user = new User({
-        email: "john@foo.bar",
-        username: "john",
-        password: hp1
+    const hp1 = await bcrypt.hash("admin-product", 10)
+    const admin = new User({
+        email: "admin@product.test",
+        username: "AdminProduct",
+        password: hp1,
+        access_level: 3
     })
-    await user.save()
+    await admin.save()
 
     // Create a second test user
-    const hp2 = await bcrypt.hash("unauthorized", 10)
-    const u = new User({
-        email: "unauthorizeduser@email.loc",
-        username: "unauthorizeduser",
+    const hp2 = await bcrypt.hash("user-product", 10)
+    const user = new User({
+        email: "user@product.test",
+        username: "UserProduct",
         password: hp2
     })
-    await u.save()
+    await user.save()
 
     // Create dummy products
     const product = new Product({
         name: "product 1",
         description: "this is product 1",
         price: 10.49,
-        seller: user._id,
         stock: 10
     })
     await product.save()
@@ -45,7 +46,6 @@ beforeAll(async () => {
         name: "product 2",
         description: "this is product 2",
         price: 5.73,
-        seller: user._id,
         stock: 10
     })
     await product2.save()
@@ -54,18 +54,23 @@ beforeAll(async () => {
         name: "product 3",
         description: "this is product 3",
         price: 13.21,
-        seller: user._id,
         stock: 10
     })
     await product3.save()
+
+    products.push(product)
+    products.push(product2)
+    products.push(product3)
 })
 
 afterAll(async () => {
     // Delete the dummy user and products
-    const user = await User.findOne({ email: "john@foo.bar" })
-    await Product.deleteMany({ seller: user._id})
+    const user = await User.findOne({ email: "admin@product.test" })
     await user.delete()
-    await User.deleteOne({ username: "unauthorizeduser" })
+    for (let i = 0; i < products.length; i++) {
+        await products[i].delete()
+    }
+    await User.deleteOne({ email: "user@product.test" })
     await mongoose.connection.close()
 })
 
@@ -96,10 +101,10 @@ describe("GET /products/:id", () => {
 })
 
 describe("POST /products", () => {
-    test("should create a product", async () => {
+    test("users with access level 2 or higher should create a product", async () => {
         const u = await request(app).post("/login").send({
-            email: "john@foo.bar",
-            password: "fake-password"
+            email: "admin@product.test",
+            password: "admin-product"
         })
 
         const res = await request(app).post("/products").set({"Authorization": u.headers["authorization"]}).send({
@@ -116,7 +121,7 @@ describe("POST /products", () => {
         await Product.deleteOne({"_id": res.body["_id"]})
     })
 
-    test("unauthenticated should fail to create a product", async () => {
+    test("unauthenticated user should fail to create a product", async () => {
         const res = await request(app).post("/products").send({
             name: "product 4",
             description: "this is product 4",
@@ -127,10 +132,26 @@ describe("POST /products", () => {
         expect(res.body["_id"]).toBeUndefined()
     })
 
+    test("unauthorized user should fail to create a product", async () => {
+        const u = await request(app).post("/login").send({
+            email: "user@product.test",
+            password: "user-product"
+        })
+
+        const res = await request(app).post("/products").set({ "Authorization": u.headers["authorization"] }).send({
+            name: "product 4",
+            description: "this is product 4",
+            price: 20,
+            stock: 10
+        })
+        expect(res.statusCode).toBe(http.statusForbidden)
+        expect(res.body["_id"]).toBeUndefined()
+    })
+
     test("product name should be at least 5 characters long", async () => {
         const u = await request(app).post("/login").send({
-            email: "john@foo.bar",
-            password: "fake-password"
+            email: "admin@product.test",
+            password: "admin-product"
         })
 
         const res = await request(app).post("/products").set({ "Authorization": u.headers["authorization"] }).send({
@@ -145,8 +166,8 @@ describe("POST /products", () => {
 
     test("product price should not be negative", async () => {
         const u = await request(app).post("/login").send({
-            email: "john@foo.bar",
-            password: "fake-password"
+            email: "admin@product.test",
+            password: "admin-product"
         })
 
         const res = await request(app).post("/products").set({ "Authorization": u.headers["authorization"] }).send({
@@ -161,8 +182,8 @@ describe("POST /products", () => {
 
     test("product stock should be at least 1 or more", async () => {
         const u = await request(app).post("/login").send({
-            email: "john@foo.bar",
-            password: "fake-password"
+            email: "admin@product.test",
+            password: "admin-product"
         })
 
         const res = await request(app).post("/products").set({ "Authorization": u.headers["authorization"] }).send({
@@ -177,10 +198,10 @@ describe("POST /products", () => {
 })
 
 describe("PUT /products/:id", () => {
-    test("should successfully update a product", async () => {
+    test("authorized user should successfully update a product", async () => {
         const u = await request(app).post("/login").send({
-            email: "john@foo.bar",
-            password: "fake-password"
+            email: "admin@product.test",
+            password: "admin-product"
         })
         expect(u.statusCode).toBe(http.statusOK)
 
@@ -201,8 +222,8 @@ describe("PUT /products/:id", () => {
 
     test("unauthorized user should fail to update a product", async () => {
         const u = await request(app).post("/login").send({
-            email: "unauthorizeduser@email.loc",
-            password: "unauthorized"
+            email: "user@product.test",
+            password: "user-product"
         })
         expect(u.statusCode).toBe(http.statusOK)
 
@@ -220,8 +241,8 @@ describe("PUT /products/:id", () => {
 
     test("product name should be at least 5 characters long", async () => {
         const u = await request(app).post("/login").send({
-            email: "john@foo.bar",
-            password: "fake-password"
+            email: "admin@product.test",
+            password: "admin-product"
         })
         expect(u.statusCode).toBe(http.statusOK)
 
@@ -239,8 +260,8 @@ describe("PUT /products/:id", () => {
 
     test("product price should not be negative", async () => {
         const u = await request(app).post("/login").send({
-            email: "john@foo.bar",
-            password: "fake-password"
+            email: "admin@product.test",
+            password: "admin-product"
         })
         expect(u.statusCode).toBe(http.statusOK)
 
@@ -258,8 +279,8 @@ describe("PUT /products/:id", () => {
 
     test("product stock should be at least 1 or more", async () => {
         const u = await request(app).post("/login").send({
-            email: "john@foo.bar",
-            password: "fake-password"
+            email: "admin@product.test",
+            password: "admin-product"
         })
         expect(u.statusCode).toBe(http.statusOK)
 
@@ -277,8 +298,8 @@ describe("PUT /products/:id", () => {
 
     test("should not find product", async () => {
         const u = await request(app).post("/login").send({
-            email: "john@foo.bar",
-            password: "fake-password"
+            email: "admin@product.test",
+            password: "admin-product"
         })
         expect(u.statusCode).toBe(http.statusOK)
 
@@ -296,10 +317,10 @@ describe("PUT /products/:id", () => {
 })
 
 describe("DELETE /products/:id", () => {
-    test("should delete product", async () => {
+    test("authorized user should delete product", async () => {
         const u = await request(app).post("/login").send({
-            email: "john@foo.bar",
-            password: "fake-password"
+            email: "admin@product.test",
+            password: "admin-product"
         })
         expect(u.statusCode).toBe(http.statusOK)
         
@@ -311,8 +332,8 @@ describe("DELETE /products/:id", () => {
 
     test("unauthorized user should fail to delete product", async () => {
         const u = await request(app).post("/login").send({
-            email: "unauthorizeduser@email.loc",
-            password: "unauthorized"
+            email: "user@product.test",
+            password: "user-product"
         })
         expect(u.statusCode).toBe(http.statusOK)
 
@@ -323,8 +344,8 @@ describe("DELETE /products/:id", () => {
 
     test("should not find product to delete", async () => {
         const u = await request(app).post("/login").send({
-            email: "john@foo.bar",
-            password: "fake-password"
+            email: "admin@product.test",
+            password: "admin-product"
         })
         expect(u.statusCode).toBe(http.statusOK)
 

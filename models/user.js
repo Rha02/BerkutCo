@@ -17,6 +17,10 @@ const userSchema = mongoose.Schema({
         required: true,
         min: [6, 'Username must be at least 6 characters long'],
         max: [50, 'Username cannot exceed 50 characters']
+    },
+    access_level: {
+        type: Number,
+        default: 1
     }
 })
 
