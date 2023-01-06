@@ -7,7 +7,9 @@ const jwt = require('jsonwebtoken')
 const productSchema = require('../middleware/productSchema')
 const http = require('../utils/http')
 
+// Handle requests to "/products"
 router.route('/')
+    // Return a list of products on a GET request to "/products"
     .get(async (req, res) => {
         limit = req.query.limit ? Math.min(req.query.limit, 500) : 100
         skip = req.query.skip ? req.query.skip : 0
@@ -21,6 +23,8 @@ router.route('/')
             })
         }
     })
+
+    // Create a new product on a POST request to "/products"
     .post(checkSchema(productSchema), async (req, res) => {
         const errors = validationResult(req)
         if (!errors.isEmpty()) {
@@ -50,12 +54,18 @@ router.route('/')
             })
         }
 
+        if (user.access_level < 2) {
+            return res.status(http.statusForbidden).json({
+                errors: [{ msg: "User is unauthorized to access this resource" }]
+            })
+        }
+
         try {
             const product = new Product({
                 name: req.body.name,
                 description: req.body.description,
                 price: req.body.price,
-                seller: user._id
+                stock: req.body.stock
             })
 
             const savedProduct = await product.save()
@@ -67,7 +77,9 @@ router.route('/')
         }
     })
 
+// Handle requests to a "/products/:id" where id is the id of the product
 router.route('/:id')
+    // Return a product on a GET request
     .get(async (req, res) => {
         try {
             const product = await Product.findOne({ _id: req.params.id })
@@ -83,6 +95,8 @@ router.route('/:id')
             })
         }
     })
+
+    // Replace an existing product with an updated product on a PUT request
     .put(checkSchema(productSchema), async (req, res) => {
         const errors = validationResult(req)
         if (!errors.isEmpty()) {
@@ -105,6 +119,14 @@ router.route('/:id')
             })
         }
 
+        const user = await User.findOne({ _id: u._id })
+
+        if (user.access_level < 2) {
+            return res.status(http.statusForbidden).json({
+                errors: [{ msg: "User is unauthorized to access this resource" }]
+            })
+        }
+
         try {
             let product = await Product.findOne({ _id: req.params.id })
             if (!product) {
@@ -113,17 +135,11 @@ router.route('/:id')
                 })
             }
 
-            if (product.seller != u._id) {
-                return res.status(http.statusForbidden).json({
-                    errors: [{ msg: "User is unauthorized to access this resource" }]
-                })
-            }
-
             const updatedProduct = {
                 name: req.body.name,
                 description: req.body.description,
                 price: req.body.price,
-                seller: u._id
+                stock: req.body.stock
             }
 
             await Product.updateOne({_id: product.id}, {
@@ -137,6 +153,8 @@ router.route('/:id')
             })
         }
     })
+
+    // Delete a product on a DELETE request
     .delete(async (req, res) => {
         const token = req.header('Authorization')
         if (!token) {
@@ -154,16 +172,19 @@ router.route('/:id')
             })
         }
 
+        const user = await User.findOne({ _id: u._id })
+
+        if (user.access_level < 2) {
+            return res.status(http.statusForbidden).json({
+                errors: [{ msg: "User is unauthorized to access this resource" }]
+            })
+        }
+
         try {
             const product = await Product.findOne({ _id: req.params.id })
             if (!product) {
                 return res.status(http.statusNotFound).json({
                     errors: [{ msg: "Product not found" }]
-                })
-            }
-            if (product.seller != u._id) {
-                return res.status(http.statusForbidden).json({
-                    errors: [{ msg: "User is unauthorized to access this resource" }]
                 })
             }
 

@@ -1,3 +1,4 @@
+/**loginSchema defines a request validation schema for logging in a user */
 const loginSchema = {
     email: {
         isEmail: true,
@@ -11,6 +12,7 @@ const loginSchema = {
     }
 }
 
+/**registerSchema defines a request validation schema for registering a user */
 const registerSchema = {
     email: {
         isEmail: true,

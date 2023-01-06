@@ -1,5 +1,6 @@
 const mongoose = require("mongoose")
 
+/**productSchema defines a schema for the Product model */
 const productSchema = new mongoose.Schema({
     name: {
         type: String,
@@ -18,10 +19,10 @@ const productSchema = new mongoose.Schema({
         min: [0, 'Minimum price of an item is zero'],
         max: [99999.99, 'Products higher than the price of $99999.99 are not supported']
     },
-    seller: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'User',
-        required: true
+    stock: {
+        type: Number,
+        required: true,
+        validate: { validator: Number.isInteger }
     }
 }, {timestamps: true})
 

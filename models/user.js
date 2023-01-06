@@ -1,5 +1,6 @@
 const mongoose = require('mongoose')
 
+/**userSchema defines a schema for the User model*/
 const userSchema = mongoose.Schema({
     email: {
         type: String,
@@ -16,6 +17,14 @@ const userSchema = mongoose.Schema({
         required: true,
         min: [6, 'Username must be at least 6 characters long'],
         max: [50, 'Username cannot exceed 50 characters']
+    },
+    access_level: {
+        type: Number,
+        default: 1
+    },
+    cart: {
+        type: [mongoose.Schema.Types.ObjectId],
+        ref: 'Product'
     }
 })
 
