@@ -21,6 +21,10 @@ const userSchema = mongoose.Schema({
     access_level: {
         type: Number,
         default: 1
+    },
+    cart: {
+        type: [mongoose.Schema.Types.ObjectId],
+        ref: 'Product'
     }
 })
 

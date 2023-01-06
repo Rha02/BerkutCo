@@ -73,7 +73,7 @@ afterAll(async () => {
     await mongoose.connection.close()
 })
 
-describe("GET /cart", () => {
+describe("GET /cart/:user_id", () => {
     test("should get products stored in the user's cart", async () => {
         const u = await request(app).post("/login").send({
             email: "user@cart.test",
@@ -81,31 +81,80 @@ describe("GET /cart", () => {
         })
         expect(u.statusCode).toBe(http.statusOK)
 
-        const res = await request(app).get("/cart").set("Authorization", u.headers["authorization"])
+        const user = await User.findOne({ email: "user@cart.test" })
+
+        const res = await request(app).get(`/cart/${user._id}`).set("Authorization", u.headers["authorization"])
         expect(res.statusCode).toBe(http.statusOK)
         expect(res.body).toHaveLength(2)
     })
 
-    test("unauthorized user should fail to see a cart", async () => {
+    // authorized user should see other user's cart
+    test("authorized user should see other user's cart", async () => {
+        const u = await request(app).post("/login").send({
+            email: "admin@cart.test",
+            password: "admin-cart"
+        })
+        expect(u.statusCode).toBe(http.statusOK)
+
+        const user = await User.findOne({ email: "user@cart.test" })
+
+        const res = await request(app).get(`/cart/${user._id}`).set("Authorization", u.headers["authorization"])
+        expect(res.statusCode).toBe(http.statusOK)
+        expect(res.body).toHaveLength(2)
+    })
+
+    test("unauthenticated user should fail to see a cart", async () => {
         const user = await User.findOne({ email: "user@cart.test" })
         const res = await request(app).get(`/cart/${user._id}`)
         expect(res.statusCode).toBe(http.statusUnauthorized)
         expect(res.body).toHaveProperty("errors")
     })
+
+    // unauthorized user should not see other user's cart
+    test("unauthorized user should not see other user's cart", async () => {
+        const u = await request(app).post("/login").send({
+            email: "user2@cart.test",
+            password: "user2-cart"
+        })
+        expect(u.statusCode).toBe(http.statusOK)
+
+        const user = await User.findOne({ email: "user@cart.test" })
+        const res = await request(app).get(`/cart/${user._id}`).set("Authorization", u.headers["authorization"])
+        expect(res.statusCode).toBe(http.statusForbidden)
+        expect(res.body).toHaveProperty("errors")
+    })
+
+    test("should fail to get cart of non-existent user", async () => {
+        const u = await request(app).post("/login").send({
+            email: "admin@cart.test",
+            password: "admin-cart"
+        })
+
+        const res = await request(app).get(`/cart/${mongoose.Types.ObjectId()}`).set("Authorization", u.headers["authorization"])
+        expect(res.statusCode).toBe(http.statusNotFound)
+        expect(res.body).toHaveProperty("errors")
+    })
 })
 
-describe("POST /cart", () => {
+describe("POST /cart/:user_id", () => {
     test("should successfully save a product in the cart", async () => {
         const u = await request(app).post("/login").send({
             email: "user2@cart.test",
             password: "user2-cart",
         })
+        expect(u.statusCode).toBe(http.statusOK)
 
-        const res = await request(app).post(`/cart/${u.body._id}`).set("Authorization", u.headers["authorization"]).send({
+        const user = await User.findOne({ email: "user2@cart.test" }) 
+
+        const res = await request(app).post(`/cart/${user._id}`).set("Authorization", u.headers["authorization"]).send({
             product_id: products[0]._id
         })
         expect(res.statusCode).toBe(http.statusOK)
-        expect(res.body).toHaveProperty("message")
+        expect(res.body).toHaveProperty("msg")
+
+        const updatedUser = await User.findOne({ email: "user2@cart.test" })
+        expect(updatedUser.cart).toHaveLength(1)
+        expect(updatedUser.cart[0]).toEqual(products[0]._id)
     })
 
     test("unauthenticated user should fail to save a product in the cart", async () => {
@@ -118,6 +167,25 @@ describe("POST /cart", () => {
         expect(res.body).toHaveProperty("errors")
     })
 
+    // authorized user should save a product to other user's cart
+    test("authorized user should save a product to other user's cart", async () => {
+        const u = await request(app).post("/login").send({
+            email: "admin@cart.test",
+            password: "admin-cart"
+        })
+        expect(u.statusCode).toBe(http.statusOK)
+
+        const user = await User.findOne({ email: "user2@cart.test" })
+        const res = await request(app).post(`/cart/${user._id}`).set("Authorization", u.headers["authorization"]).send({
+            product_id: products[1]._id
+        })
+        expect(res.statusCode).toBe(http.statusOK)
+        expect(res.body).toHaveProperty("msg")
+
+        const updatedUser = await User.findOne({ email: "user2@cart.test" })
+        expect(updatedUser.cart).toHaveLength(2)
+    })
+
     test("should fail to save a non-existing product to the cart", async () => {
         const u = await request(app).post("/login").send({
             email: "user2@cart.test",
@@ -125,24 +193,50 @@ describe("POST /cart", () => {
         })
         expect(u.statusCode).toBe(http.statusOK)
 
-        const res = await request(app).post(`/cart/${u._id}`).set("Authorization", u.headers["authorization"]).send({
+        const user = await User.findOne({ email: "user2@cart.test" })
+
+        const res = await request(app).post(`/cart/${user._id}`).set("Authorization", u.headers["authorization"]).send({
             product_id: "5f8b9b9b9b9b9b9b9b9b9b9b"
+        })
+        expect(res.statusCode).toBe(http.statusNotFound)
+        expect(res.body).toHaveProperty("errors")
+
+        const updatedUser = await User.findOne({ email: "user2@cart.test" })
+        expect(updatedUser.cart).toHaveLength(2)
+    })
+
+    test("should fail to save a product to non-existent user's cart", async () => {
+        const u = await request(app).post("/login").send({
+            email: "admin@cart.test",
+            password: "admin-cart"
+        })
+        expect(u.statusCode).toBe(http.statusOK)
+
+        const res = await request(app).post(`/cart/${mongoose.Types.ObjectId()}`).set("Authorization", u.headers["authorization"]).send({
+            product_id: products[1]._id
         })
         expect(res.statusCode).toBe(http.statusNotFound)
         expect(res.body).toHaveProperty("errors")
     })
 })
 
-describe("DELETE /cart/:product_id", () => {
+describe("DELETE /cart/:user_id/:product_id", () => {
     test("should successfully remove a product with id from the cart", async () => {
         const u = await request(app).post("/login").send({
             email: "user@cart.test",
             password: "user-cart",
         })
+        expect(u.statusCode).toBe(http.statusOK)
 
-        const res = await request(app).delete(`/cart/${u._id}/products/${products[0]._id}`).set("Authorization", u.headers["authorization"])
+        const user = await User.findOne({ email: "user@cart.test" })
+
+        const res = await request(app).delete(`/cart/${user._id}/${products[0]._id}`).set("Authorization", u.headers["authorization"])
         expect(res.statusCode).toBe(http.statusOK)
-        expect(res.body).toHaveProperty("message")
+        expect(res.body).toHaveProperty("msg")
+
+        const updatedUser = await User.findOne({ email: "user@cart.test" })
+        expect(updatedUser.cart).toHaveLength(1)
+        expect(updatedUser.cart[0]).toEqual(products[1]._id)
     })
 
     test("moderator should successfully remove another person's cart", async () => {
@@ -150,12 +244,16 @@ describe("DELETE /cart/:product_id", () => {
             email: "admin@cart.test",
             password: "admin-cart"
         })
+        expect(u.statusCode).toBe(http.statusOK)
 
         const user = await User.findOne({ email: "user@cart.test" })
 
-        const res = await request(app).delete(`/cart/${user._id}/products/${products[0]._id}`).set("Authorization", u.headers["authorization"])
+        const res = await request(app).delete(`/cart/${user._id}/${products[1]._id}`).set("Authorization", u.headers["authorization"])
         expect(res.statusCode).toBe(http.statusOK)
-        expect(res.body).toHaveProperty("message")
+        expect(res.body).toHaveProperty("msg")
+
+        const updatedUser = await User.findOne({ email: "user@cart.test" })
+        expect(updatedUser.cart).toHaveLength(0)
     })
     
     test("unauthorized user should fail to remove any products", async () => {
@@ -163,11 +261,12 @@ describe("DELETE /cart/:product_id", () => {
             email: "user2@cart.test",
             password: "user2-cart"
         })
+        expect(u.statusCode).toBe(http.statusOK)
 
         const user = await User.findOne({ email: "user@cart.test" })
 
-        const res = await request(app).delete(`/cart/${u._id}/products/${products[0]._id}`).set("Authorization", u.headers["authorization"])
-        expect(res.statusCode).toBe(http.statusUnauthorized)
+        const res = await request(app).delete(`/cart/${user._id}/${products[1]._id}`).set("Authorization", u.headers["authorization"])
+        expect(res.statusCode).toBe(http.statusForbidden)
         expect(res.body).toHaveProperty("errors")
     })
 
@@ -176,8 +275,23 @@ describe("DELETE /cart/:product_id", () => {
             email: "user@cart.test",
             password: "user-cart",
         })
+        expect(u.statusCode).toBe(http.statusOK)
 
-        const res = await request(app).delete(`/cart/${u._id}/products/${products[0]._id}`).set("Authorization", u.headers["authorization"])
+        const user = await User.findOne({ email: "user@cart.test" })
+
+        const res = await request(app).delete(`/cart/${user._id}/${products[0]._id}`).set("Authorization", u.headers["authorization"])
+        expect(res.statusCode).toBe(http.statusNotFound)
+        expect(res.body).toHaveProperty("errors")
+    })
+
+    test("should fail to remove a product from non-existent user's cart", async () => {
+        const u = await request(app).post("/login").send({
+            email: "admin@cart.test",
+            password: "admin-cart"
+        })
+        expect(u.statusCode).toBe(http.statusOK)
+
+        const res = await request(app).delete(`/cart/${mongoose.Types.ObjectId()}/${products[1]._id}`).set("Authorization", u.headers["authorization"])
         expect(res.statusCode).toBe(http.statusNotFound)
         expect(res.body).toHaveProperty("errors")
     })
