@@ -1,5 +1,7 @@
 const mongoose = require('mongoose')
 
+/**cartProductSchema defines a subschema for products that are stored in cart */
+
 /**userSchema defines a schema for the User model*/
 const userSchema = mongoose.Schema({
     email: {
@@ -23,9 +25,21 @@ const userSchema = mongoose.Schema({
         default: 1
     },
     cart: {
-        type: [mongoose.Schema.Types.ObjectId],
-        ref: 'Product'
+        type: [{
+            product_id: {
+                type: mongoose.Schema.Types.ObjectId,
+                ref: 'Product',
+                required: true
+            },
+            quantity: {
+                type: Number,
+                required: true,
+                validate: { validator: Number.isInteger }
+            },
+            _id: false
+        }],
+        default: []
     }
-})
+}, { timestamps: true })
 
 module.exports = mongoose.model('User', userSchema)

@@ -25,18 +25,19 @@ router.post("/login", checkSchema(loginSchema), async (req, res) => {
             })
         }
 
-        passwordsMatch = await bcrypt.compare(req.body.password, user.password)
-        if (!passwordsMatch) {
+        // Check if the password is correct
+        const validPassword = await bcrypt.compare(req.body.password, user.password)
+        if (!validPassword) {
             return res.status(http.statusUnauthorized).json({
-                errors: [{ msg: "Invalid credentials" }]
+                errors: [{ msg: "Invalid password" }]
             })
         }
         
         const token = jwt.sign({ _id: user._id }, process.env.SECRET_TOKEN, { expiresIn: '7d' })
-        
-        res.setHeader("Authorization", token).json({
-            errors: []
-        })
+
+        // hide the password field
+        user.password = undefined
+        res.setHeader("Authorization", token).json(user)
     } catch(err) {
         res.status(http.statusInternalServerError).json({
             errors: [{ msg: "Unexpected error encountered" }]
@@ -74,7 +75,10 @@ router.post("/register", checkSchema(registerSchema), async (req, res) => {
         })
 
         const savedUser = await user.save()
-        return res.status(http.statusCreated).json({ user_id: savedUser._id, errors: [] })
+        return res.status(http.statusCreated).json({
+            _id: savedUser._id,
+            msg: "User created successfully"
+        })
     } catch (err) {
         return res.status(http.statusInternalServerError).json({
             errors: [{ msg: "Unexpected error encountered" }]
@@ -108,10 +112,9 @@ router.get("/checkauth", async (req, res) => {
             })
         }
 
-        return res.json({
-            email: user.email,
-            username: user.username
-        })
+        // hide the password field
+        user.password = undefined
+        return res.json(user)
     } catch(err) {
         return res.status(http.statusInternalServerError).json({
             errors: [{ msg: "Unexpected error encountered" }]
