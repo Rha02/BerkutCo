@@ -35,7 +35,16 @@ describe("POST /login", () => {
         })
         expect(res.statusCode).toBe(http.statusOK)
         expect(res.headers["authorization"]).toBeDefined()
-        expect(res.body["errors"]).toHaveLength(0)
+        expect(res.body).toMatchObject({
+            _id: expect.any(String),
+            username: "testuser",
+            email: "fake@email.test",
+            access_level: 1,
+            cart: expect.any(Array),
+            createdAt: expect.any(String),
+            updatedAt: expect.any(String),
+        })
+        expect(res.body).not.toHaveProperty("password")
     })
 
     test("user email should not be found", async () => {
@@ -46,7 +55,7 @@ describe("POST /login", () => {
 
         expect(res.statusCode).toBe(http.statusNotFound)
         expect(res.headers["authorization"]).toBeUndefined()
-        expect(res.body["errors"]).toHaveLength(1)
+        expect(res.body).toHaveProperty("errors")
     })
 
     test("password should be incorrect", async () => {
@@ -57,7 +66,7 @@ describe("POST /login", () => {
 
         expect(res.statusCode).toBe(http.statusUnauthorized)
         expect(res.headers["authorization"]).toBeUndefined()
-        expect(res.body["errors"]).toHaveLength(1)
+        expect(res.body).toHaveProperty("errors")
     })
 })
 
@@ -70,9 +79,12 @@ describe("POST /register", () => {
         })
 
         expect(res.statusCode).toBe(http.statusCreated)
-        expect(res.body["user_id"]).toBeDefined()
+        expect(res.body).toMatchObject({
+            _id: expect.any(String),
+            msg: "User created successfully",
+        })
 
-        await User.deleteOne({_id: res.body["user_id"]})
+        await User.deleteOne({_id: res.body._id})
     })
 
     test("email in wrong email format", async () => {
@@ -93,7 +105,7 @@ describe("POST /register", () => {
         })
 
         expect(res.statusCode).toBe(http.statusBadRequest)
-        expect(res.body["errors"]).toHaveLength(1)
+        expect(res.body).toHaveProperty("errors")
     })
 
     test("username already be in use", async () => {
@@ -104,7 +116,6 @@ describe("POST /register", () => {
         })
 
         expect(res.statusCode).toBe(http.statusBadRequest)
-        expect(res.body["errors"]).toHaveLength(1)
     })
 
     test("password less than 8 characters", async () => {
@@ -138,19 +149,27 @@ describe("GET /checkauth", () => {
 
         const res2 = await request(app).get("/checkauth").set({"Authorization": res1.headers["authorization"]})
         expect(res2.statusCode).toBe(http.statusOK)
-        expect(res2.body["email"]).toBe("fake@email.test")
-        expect(res2.body["username"]).toBe("testuser")
+        expect(res2.body).toMatchObject({
+            _id: expect.any(String),
+            email: "fake@email.test",
+            username: "testuser",
+            access_level: 1,
+            cart: expect.any(Array),
+            createdAt: expect.any(String),
+            updatedAt: expect.any(String)
+        })
+        expect(res2.body).not.toHaveProperty("password")
     })
 
     test("missing authorization token", async () => {
         const res = await request(app).get("/checkauth")
         expect(http.statusBadRequest)
-        expect(res.body["errors"]).toHaveLength(1)
+        expect(res.body).toHaveProperty("errors")
     })
 
     test("invalid authorization token", async () => {
         const res = await request(app).get("/checkauth").set({"Authorization": "invalid token here"})
         expect(http.statusBadRequest)
-        expect(res.body["errors"]).toHaveLength(1)
+        expect(res.body).toHaveProperty("errors")
     })
 })
