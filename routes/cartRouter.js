@@ -5,6 +5,7 @@ const User = require('../models/user')
 const { validationResult, checkSchema } = require("express-validator")
 const jwt = require('jsonwebtoken')
 const http = require('../utils/http')
+const cartSchema = require('../middleware/cartSchema')
 
 // Handle requests to "/cart"
 router.route('/:user_id')
@@ -45,7 +46,7 @@ router.route('/:user_id')
         }
 
         try {
-            const products = await Product.find({_id: {$in: user.cart}})
+            const products = await Product.find({ _id: { $in: user.cart.map(p => p.product_id) } })
             res.json(products)
         }
         catch (err) {
@@ -55,7 +56,12 @@ router.route('/:user_id')
         }
     })
     // Add a product to the user's cart on a POST request to "/cart"
-    .post(async (req, res) => {
+    .post(checkSchema(cartSchema), async (req, res) => {
+        const errors = validationResult(req)
+        if (!errors.isEmpty()) {
+            return res.status(http.statusBadRequest).json({ errors: errors.array() })
+        }
+
         const token = req.header('Authorization')
         if (!token) {
             return res.status(http.statusUnauthorized).json({
@@ -97,9 +103,25 @@ router.route('/:user_id')
                     errors: [{ msg: "Invalid product id" }]
                 })
             }
-            // Add the product to the user's cart
-            user.cart.push(req.body.product_id)
-            await user.save()
+
+            if (product.stock < req.body.quantity) {
+                return res.status(http.statusBadRequest).json({
+                    errors: [{ msg: "Insufficient stock" }]
+                })
+            }
+
+            // Check if product is already in cart
+            for (let i = 0; i < user.cart.length; i++) {
+                if (user.cart[i].product_id.toString() == req.body.product_id.toString()) {
+                    return res.status(http.statusBadRequest).json({
+                        errors: [{ msg: "Product already in cart" }]
+                    })
+                }
+            }
+
+            // add product to cart
+            await User.updateOne({_id: user._id}, { $push: { cart: { product_id: req.body.product_id, quantity: req.body.quantity } } })
+
             res.json({ msg: "Product added to cart" })
         } catch(err) {
             res.status(http.statusInternalServerError).json({
@@ -109,6 +131,88 @@ router.route('/:user_id')
     })
 
 router.route('/:user_id/:product_id')
+    // Update the quantity of the product
+    .put(checkSchema(cartSchema), async (req, res) => {
+        const errors = validationResult(req)
+        if (!errors.isEmpty()) {
+            return res.status(http.statusBadRequest).json({ errors: errors.array() })
+        }
+
+        const token = req.header('Authorization')
+        if (!token) {
+            return res.status(http.statusUnauthorized).json({
+                errors: [{ msg: "Unauthenticated" }]
+            })
+        }
+
+        let u = undefined
+        try {
+            u = jwt.verify(token, process.env.SECRET_TOKEN)
+        } catch(err) {
+            return res.status(http.statusUnauthorized).json({
+                errors: [{ msg: "Invalid authentication token" }]
+            })
+        }
+
+        const currUser = await User.findOne({_id: u._id})
+        const user = await User.findOne({_id: req.params.user_id})
+        
+        if (!currUser) {
+            return res.status(http.statusBadRequest).json({
+                errors: [{ msg: "Invalid authentication token" }]
+            })
+        }
+        if (!user) {
+            return res.status(http.statusNotFound).json({
+                errors: [{ msg: "Invalid user id" }]
+            })
+        }
+
+        if (currUser._id.toString() != user._id.toString() && currUser.access_level < 2) {
+            return res.status(http.statusForbidden).json({
+                errors: [{ msg: "User is unauthorized to access this resource" }]
+            })
+        }
+
+        try {
+            const product = await Product.findOne({_id: req.params.product_id})
+            if (!product) {
+                return res.status(http.statusNotFound).json({
+                    errors: [{ msg: "Invalid product id" }]
+                })
+            }
+
+            if (product.stock < req.body.quantity) {
+                return res.status(http.statusBadRequest).json({
+                    errors: [{ msg: "Insufficient stock" }]
+                })
+            }
+
+            // check if product is in cart
+            let found = false
+            for (let i = 0; i < user.cart.length && !found; i++) {
+                if (user.cart[i].product_id.toString() == req.params.product_id.toString()) {
+                    await User.updateOne(
+                        {_id: user._id, "cart.product_id": req.params.product_id},
+                        { $set: { "cart.$.quantity": req.body.quantity } }
+                    )
+                    found = true
+                }
+            }
+
+            if (!found) {
+                return res.status(http.statusNotFound).json({
+                    errors: [{ msg: "Product not in cart" }]
+                })
+            }
+
+            return res.json({ msg: "Product quantity updated" })
+        } catch(err) {
+            res.status(http.statusInternalServerError).json({
+                errors: [{ msg: "Unexpected error encountered" }]
+            })
+        }
+    })
     // Remove a product from the user's cart on a DELETE request to "/cart"
     .delete(async (req, res) => {
         const token = req.header('Authorization')
@@ -154,11 +258,15 @@ router.route('/:user_id/:product_id')
                 })
             }
 
+            // Remove the product from the user's cart
             let found = false
-            user.cart = user.cart.filter(p => {
-                found = found || p.toString() == req.params.product_id
-                return p != req.params.product_id
-            })
+            for (let i = 0; i < user.cart.length && !found; i++) {
+                if (user.cart[i].product_id.toString() == req.params.product_id) {
+                    user.cart.splice(i, 1)
+                    found = true
+                }
+            }
+
             if (!found) {
                 return res.status(http.statusNotFound).json({
                     errors: [{ msg: "Product not in cart" }]
