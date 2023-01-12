@@ -23,6 +23,10 @@ const productSchema = new mongoose.Schema({
         type: Number,
         required: true,
         validate: { validator: Number.isInteger }
+    },
+    image_name: {
+        type: String,
+        default: "default.png"
     }
 }, {timestamps: true})
 
