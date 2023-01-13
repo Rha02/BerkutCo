@@ -28,9 +28,11 @@ router.route('/')
         skip = req.query.skip ? req.query.skip : 0
 
         try {
-            products = await Product.find().sort({ createdAt: -1 }).skip(skip).limit(limit)
+            products = await Product.find().sort({ createdAt: -1 }).skip(skip).limit(limit).lean()
 
-            // TODO: Generate SAS tokens and attach to products' image url
+            for (let i = 0; i < products.length; i++) {
+                products[i].image_url = `https://${process.env.AZURE_STORAGE_ACCOUNT_NAME}.blob.core.windows.net/images/${products[i].image_name}`
+            }
 
             res.json(products)
         } catch (err) {
@@ -85,19 +87,21 @@ router.route('/')
             })
 
             const image_name = req.file ? createImageName(req.file.originalname) : null
+            
             if (req.file) {
                 const blobClient = new BlockBlobClient(
                     process.env.AZURE_STORAGE_CONNECTION_STRING, 
-                    process.env.AZURE_STORAGE_CONTAINER_NAME, 
+                    "images", 
                     image_name)
                 await blobClient.uploadData(req.file.buffer)
-                product.image = image_name
+                await blobClient.setHTTPHeaders({ blobContentType: `${req.file.mimetype}` })
+                product.image_name = image_name
             }
 
-            const savedProduct = await product.save()
+            const savedProduct = await product.save() 
+            savedProduct.set('image_url', `https://${process.env.AZURE_STORAGE_ACCOUNT_NAME}.blob.core.windows.net/images/${savedProduct.image_name}`, { strict: false })
             res.status(http.statusCreated).json(savedProduct)
         } catch (err) {
-            console.log(err)
             res.status(http.statusInternalServerError).json({
                 errors: [{ msg: "Unexpected error encountered" }]
             })
@@ -109,12 +113,13 @@ router.route('/:id')
     // Return a product on a GET request
     .get(async (req, res) => {
         try {
-            const product = await Product.findOne({ _id: req.params.id })
+            const product = await Product.findOne({ _id: req.params.id }).lean()
             if (!product) {
                 return res.status(http.statusNotFound).json({
                     errors: [{ msg: "Product not found" }]
                 })
             }
+            product.image_url = `https://${process.env.AZURE_STORAGE_ACCOUNT_NAME}.blob.core.windows.net/images/${product.image_name}`
             return res.json(product)
         } catch (err) {
             return res.status(http.statusInternalServerError).json({
@@ -171,19 +176,29 @@ router.route('/:id')
                 name: req.body.name,
                 description: req.body.description,
                 price: req.body.price,
-                stock: req.body.stock
+                stock: req.body.stock,
+                image_name: product.image_name
             }
 
-            const image_name = req.file ? createImageName(req.file.originalname) : null
             if (req.file) {
-                const blobClient = new BlockBlobClient(process.env.AZURE_STORAGE_CONNECTION_STRING, process.env.AZURE_STORAGE_CONTAINER_NAME, image_name)
+                const image_name = createImageName(req.file.originalname)
+                const blobClient = new BlockBlobClient(process.env.AZURE_STORAGE_CONNECTION_STRING, "images", image_name)
                 await blobClient.uploadData(req.file.buffer)
+                await blobClient.setHTTPHeaders({ blobContentType: `${req.file.mimetype}` })
                 updatedProduct.image_name = image_name
+                
+                // delete old image if it is not the default image
+                if (product.image_name !== "default.png") {
+                    const oldBlobClient = new BlockBlobClient(process.env.AZURE_STORAGE_CONNECTION_STRING, "images", product.image_name)
+                    await oldBlobClient.deleteIfExists()
+                }
             }
 
             await Product.updateOne({ _id: product.id }, {
                 $set: updatedProduct
             })
+
+            updatedProduct.image_url = `https://${process.env.AZURE_STORAGE_ACCOUNT_NAME}.blob.core.windows.net/images/${updatedProduct.image_name}`
 
             return res.status(http.statusOK).json(updatedProduct)
         } catch (err) {
@@ -212,7 +227,12 @@ router.route('/:id')
         }
 
         const user = await User.findOne({ _id: u._id })
-
+        if (!user) {
+            return res.status(http.statusBadRequest).json({
+                errors: [{ msg: "Invalid authentication token" }]
+            })
+        }
+        
         if (user.access_level < 2) {
             return res.status(http.statusForbidden).json({
                 errors: [{ msg: "User is unauthorized to access this resource" }]
@@ -225,6 +245,12 @@ router.route('/:id')
                 return res.status(http.statusNotFound).json({
                     errors: [{ msg: "Product not found" }]
                 })
+            }
+
+            // delete image if it is not the default image
+            if (product.image_name !== "default.png") {
+                const blobClient = new BlockBlobClient(process.env.AZURE_STORAGE_CONNECTION_STRING, "images", product.image_name)
+                await blobClient.deleteIfExists()
             }
 
             await Product.deleteOne({ _id: product._id })
