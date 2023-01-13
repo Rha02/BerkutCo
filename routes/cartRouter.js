@@ -46,7 +46,11 @@ router.route('/:user_id')
         }
 
         try {
-            const products = await Product.find({ _id: { $in: user.cart.map(p => p.product_id) } })
+            const products = await Product.find({ _id: { $in: user.cart.map(p => p.product_id) } }).lean()
+            for (let i = 0; i < products.length; i++) {
+                products[i].quantity = user.cart[i].quantity
+                products[i].image_url = `https://${process.env.AZURE_STORAGE_ACCOUNT_NAME}.blob.core.windows.net/images/${products[i].image_name}`
+            }
             res.json(products)
         }
         catch (err) {
