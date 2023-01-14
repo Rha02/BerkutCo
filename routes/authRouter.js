@@ -4,8 +4,9 @@ const User = require("../models/user")
 const bcrypt = require("bcrypt")
 const jwt = require('jsonwebtoken')
 const { validationResult, checkSchema } = require("express-validator")
-const {loginSchema, registerSchema} = require('../middleware/authSchema')
+const {loginSchema, registerSchema} = require('../validation/authSchema')
 const http = require("../utils/http")
+const { requiresAuthentication } = require("../middleware/auth")
 
 // Login a user on a POST request to "/login"
 router.post("/login", checkSchema(loginSchema), async (req, res) => {
@@ -87,39 +88,10 @@ router.post("/register", checkSchema(registerSchema), async (req, res) => {
 })
 
 // Return the currently signed-in user on a GET request to "/checkauth"
-router.get("/checkauth", async (req, res) => {
-    const token = req.header('Authorization')
-    if (!token) {
-        return res.status(http.statusUnauthorized).json({
-            errors: [{ msg: "Unauthenticated" }]
-        })
-    }
-
-    let u = undefined
-    try {
-        u = jwt.verify(token, process.env.SECRET_TOKEN)
-    } catch(err) {
-        return res.status(http.statusUnauthorized).json({
-            errors: [{ msg: "Invalid authentication token" }]
-        })
-    }
-
-    try {
-        const user = await User.findById({ _id: u._id })
-        if (!user) {
-            return res.status(http.statusNotFound).json({
-                errors: [{ msg: "Invalid authentication token" }]
-            })
-        }
-
-        // hide the password field
-        user.password = undefined
-        return res.json(user)
-    } catch(err) {
-        return res.status(http.statusInternalServerError).json({
-            errors: [{ msg: "Unexpected error encountered" }]
-        })
-    }
+router.get("/checkauth", requiresAuthentication, async (req, res) => {
+    const user = req.user
+    user.password = undefined
+    return res.json(user)
 })
 
 module.exports = router

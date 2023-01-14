@@ -1,10 +1,8 @@
 const express = require('express')
 const router = express.Router()
 const Product = require('../models/product')
-const User = require('../models/user')
 const { validationResult, checkSchema } = require("express-validator")
-const jwt = require('jsonwebtoken')
-const productSchema = require('../middleware/productSchema')
+const productSchema = require('../validation/productSchema')
 const http = require('../utils/http')
 
 const multer = require('multer')
@@ -13,6 +11,7 @@ const uploadStrategy = multer({ storage: inMemoryStorage }).single('image')
 const { BlockBlobClient } = require('@azure/storage-blob')
 
 const crypto = require('crypto')
+const {requiresAuthentication, requiresAdmin} = require('../middleware/auth')
 
 // createImageName() creates a unique name for the image file
 const createImageName = (image_name) => {
@@ -43,39 +42,10 @@ router.route('/')
     })
 
     // Create a new product on a POST request to "/products"
-    .post(uploadStrategy, checkSchema(productSchema), async (req, res) => {
+    .post(uploadStrategy, [requiresAuthentication, requiresAdmin, checkSchema(productSchema)], async (req, res) => {
         const errors = validationResult(req)
         if (!errors.isEmpty()) {
             return res.status(http.statusBadRequest).json({ errors: errors.array() })
-        }
-
-        const token = req.header('Authorization')
-        if (!token) {
-            return res.status(http.statusUnauthorized).json({
-                errors: [{ msg: "Unauthenticated" }]
-            })
-        }
-
-        let u = undefined
-        try {
-            u = jwt.verify(token, process.env.SECRET_TOKEN)
-        } catch (err) {
-            return res.status(http.statusUnauthorized).json({
-                errors: [{ msg: "Invalid authentication token" }]
-            })
-        }
-
-        const user = await User.findOne({ _id: u._id })
-        if (!user) {
-            return res.status(http.statusBadRequest).json({
-                errors: [{ msg: "Invalid authentication token" }]
-            })
-        }
-
-        if (user.access_level < 2) {
-            return res.status(http.statusForbidden).json({
-                errors: [{ msg: "User is unauthorized to access this resource" }]
-            })
         }
 
         try {
@@ -129,39 +99,10 @@ router.route('/:id')
     })
 
     // Replace an existing product with an updated product on a PUT request
-    .put(uploadStrategy, checkSchema(productSchema), async (req, res) => {
+    .put(uploadStrategy, [requiresAuthentication, requiresAdmin, checkSchema(productSchema)], async (req, res) => {
         const errors = validationResult(req)
         if (!errors.isEmpty()) {
             return res.status(http.statusBadRequest).json({ errors: errors.array() })
-        }
-
-        const token = req.header('Authorization')
-        if (!token) {
-            return res.status(http.statusUnauthorized).json({
-                errors: [{ msg: "Unauthenticated" }]
-            })
-        }
-
-        let u = undefined
-        try {
-            u = jwt.verify(token, process.env.SECRET_TOKEN)
-        } catch (err) {
-            return res.status(http.statusUnauthorized).json({
-                errors: [{ msg: "Invalid authentication token" }]
-            })
-        }
-
-        const user = await User.findOne({ _id: u._id })
-        if (!user) {
-            return res.status(http.statusBadRequest).json({
-                errors: [{ msg: "Invalid authentication token" }]
-            })
-        }
-
-        if (user.access_level < 2) {
-            return res.status(http.statusForbidden).json({
-                errors: [{ msg: "User is unauthorized to access this resource" }]
-            })
         }
 
         try {
@@ -209,36 +150,7 @@ router.route('/:id')
     })
 
     // Delete a product on a DELETE request
-    .delete(async (req, res) => {
-        const token = req.header('Authorization')
-        if (!token) {
-            return res.status(http.statusUnauthorized).json({
-                errors: [{ msg: "Unauthenticated" }]
-            })
-        }
-
-        let u = undefined
-        try {
-            u = jwt.verify(token, process.env.SECRET_TOKEN)
-        } catch (err) {
-            return res.status(http.statusUnauthorized).json({
-                errors: [{ msg: "Invalid authentication token" }]
-            })
-        }
-
-        const user = await User.findOne({ _id: u._id })
-        if (!user) {
-            return res.status(http.statusBadRequest).json({
-                errors: [{ msg: "Invalid authentication token" }]
-            })
-        }
-        
-        if (user.access_level < 2) {
-            return res.status(http.statusForbidden).json({
-                errors: [{ msg: "User is unauthorized to access this resource" }]
-            })
-        }
-
+    .delete([requiresAuthentication, requiresAdmin], async (req, res) => {
         try {
             const product = await Product.findOne({ _id: req.params.id })
             if (!product) {
