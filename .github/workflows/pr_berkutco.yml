@@ -1,0 +1,25 @@
+name: Run NodeJS tests on a Pull Request
+
+on:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test_pull_request:
+    runs_on: ubuntu latest
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Set up Node.js version
+        uses: actions/setup-node@v1
+        with:
+          node-version: '18.x'
+      
+      - name: npm install and test
+        env:
+          TEST_DATABASE_URL: ${{ secrets.TEST_DATABASE_URL }}
+          SECRET_TOKEN: ${{ secrets.SECRET_TOKEN }}
+        run: |
+          npm ci
+          npm run test --if-present
