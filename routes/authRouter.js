@@ -91,8 +91,6 @@ router.post("/register", checkSchema(registerSchema), async (req, res) => {
 router.get("/checkauth", requiresAuthentication, async (req, res) => {
     const user = req.user
     user.password = undefined
-
-    return res.json("SHOULD FAIL")
     return res.json(user)
 })
 
