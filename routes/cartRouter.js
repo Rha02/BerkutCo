@@ -3,37 +3,17 @@ const router = express.Router()
 const Product = require('../models/product')
 const User = require('../models/user')
 const { validationResult, checkSchema } = require("express-validator")
-const jwt = require('jsonwebtoken')
 const http = require('../utils/http')
-const cartSchema = require('../middleware/cartSchema')
+const cartSchema = require('../validation/cartSchema')
+const { requiresAuthentication } = require('../middleware/auth')
 
 // Handle requests to "/cart"
 router.route('/:user_id')
     // Return a list of products in the user's cart on a GET request to "/cart"
-    .get(async (req, res) => {
-        const token = req.header('Authorization')
-        if (!token) {
-            return res.status(http.statusUnauthorized).json({
-                errors: [{ msg: "Unauthenticated" }]
-            })
-        }
+    .get(requiresAuthentication, async (req, res) => {
+        const currUser = req.user
 
-        let u = undefined
-        try {
-            u = jwt.verify(token, process.env.SECRET_TOKEN)
-        } catch (err) {
-            return res.status(http.statusUnauthorized).json({
-                errors: [{ msg: "Invalid authentication token" }]
-            })
-        }
-        
-        const currUser = await User.findOne({_id: u._id})
         const user = await User.findOne({_id: req.params.user_id})
-        if (!currUser) {
-            return res.status(http.statusBadRequest).json({
-                errors: [{ msg: "Invalid authentication token" }]
-            })
-        }
         if (!user) {
             return res.status(http.statusNotFound).json({
                 errors: [{ msg: "Invalid user id" }]
@@ -46,7 +26,11 @@ router.route('/:user_id')
         }
 
         try {
-            const products = await Product.find({ _id: { $in: user.cart.map(p => p.product_id) } })
+            const products = await Product.find({ _id: { $in: user.cart.map(p => p.product_id) } }).lean()
+            for (let i = 0; i < products.length; i++) {
+                products[i].quantity = user.cart[i].quantity
+                products[i].image_url = `https://${process.env.AZURE_STORAGE_ACCOUNT_NAME}.blob.core.windows.net/images/${products[i].image_name}`
+            }
             res.json(products)
         }
         catch (err) {
@@ -56,40 +40,21 @@ router.route('/:user_id')
         }
     })
     // Add a product to the user's cart on a POST request to "/cart"
-    .post(checkSchema(cartSchema), async (req, res) => {
+    .post(requiresAuthentication, checkSchema(cartSchema), async (req, res) => {
         const errors = validationResult(req)
         if (!errors.isEmpty()) {
             return res.status(http.statusBadRequest).json({ errors: errors.array() })
         }
 
-        const token = req.header('Authorization')
-        if (!token) {
-            return res.status(http.statusUnauthorized).json({
-                errors: [{ msg: "Unauthenticated" }]
-            })
-        }
+        const currUser = req.user
 
-        let u = undefined
-        try {
-            u = jwt.verify(token, process.env.SECRET_TOKEN)
-        } catch (err) {
-            return res.status(http.statusUnauthorized).json({
-                errors: [{ msg: "Invalid authentication token" }]
-            })
-        }
-        
-        const currUser = await User.findOne({_id: u._id})
         const user = await User.findOne({_id: req.params.user_id})
-        if (!currUser) {
-            return res.status(http.statusBadRequest).json({
-                errors: [{ msg: "Invalid authentication token" }]
-            })
-        }
         if (!user) {
             return res.status(http.statusNotFound).json({
                 errors: [{ msg: "Invalid user id" }]
             })
         }
+
         if (currUser._id.toString() != user._id.toString() && currUser.access_level < 2) {
             return res.status(http.statusForbidden).json({
                 errors: [{ msg: "User is unauthorized to access this resource" }]
@@ -132,36 +97,15 @@ router.route('/:user_id')
 
 router.route('/:user_id/:product_id')
     // Update the quantity of the product
-    .put(checkSchema(cartSchema), async (req, res) => {
+    .put(requiresAuthentication, checkSchema(cartSchema), async (req, res) => {
         const errors = validationResult(req)
         if (!errors.isEmpty()) {
             return res.status(http.statusBadRequest).json({ errors: errors.array() })
         }
 
-        const token = req.header('Authorization')
-        if (!token) {
-            return res.status(http.statusUnauthorized).json({
-                errors: [{ msg: "Unauthenticated" }]
-            })
-        }
+        const currUser = req.user
 
-        let u = undefined
-        try {
-            u = jwt.verify(token, process.env.SECRET_TOKEN)
-        } catch(err) {
-            return res.status(http.statusUnauthorized).json({
-                errors: [{ msg: "Invalid authentication token" }]
-            })
-        }
-
-        const currUser = await User.findOne({_id: u._id})
         const user = await User.findOne({_id: req.params.user_id})
-        
-        if (!currUser) {
-            return res.status(http.statusBadRequest).json({
-                errors: [{ msg: "Invalid authentication token" }]
-            })
-        }
         if (!user) {
             return res.status(http.statusNotFound).json({
                 errors: [{ msg: "Invalid user id" }]
@@ -214,30 +158,10 @@ router.route('/:user_id/:product_id')
         }
     })
     // Remove a product from the user's cart on a DELETE request to "/cart"
-    .delete(async (req, res) => {
-        const token = req.header('Authorization')
-        if (!token) {
-            return res.status(http.statusUnauthorized).json({
-                errors: [{ msg: "Unauthenticated" }]
-            })
-        }
+    .delete(requiresAuthentication, async (req, res) => {
+        const currUser = req.user
 
-        let u = undefined
-        try {
-            u = jwt.verify(token, process.env.SECRET_TOKEN)
-        } catch (err) {
-            return res.status(http.statusUnauthorized).json({
-                errors: [{ msg: "Invalid authentication token" }]
-            })
-        }
-
-        const currUser = await User.findOne({_id: u._id})
         const user = await User.findOne({_id: req.params.user_id})
-        if (!currUser) {
-            return res.status(http.statusBadRequest).json({
-                errors: [{ msg: "Invalid authentication token" }]
-            })
-        }
         if (!user) {
             return res.status(http.statusNotFound).json({
                 errors: [{ msg: "Invalid user id" }]

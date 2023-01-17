@@ -6,7 +6,9 @@ const request = require('supertest')
 const http = require('../utils/http')
 const bcrypt = require('bcrypt')
 
-let products = []
+const products = []
+const sessions = {}
+
 
 beforeAll(async () => {
     await mongoose.connect(process.env.TEST_DATABASE_URL, { serverSelectionTimeoutMS: 2500 })
@@ -14,24 +16,12 @@ beforeAll(async () => {
             console.error(`Error connecting to MongoDB: ${err}`)
             process.exitCode = 1
         })
-    // Create a test user
-    const hp1 = await bcrypt.hash("admin-product", 10)
-    const admin = new User({
-        email: "admin@product.test",
-        username: "AdminProduct",
-        password: hp1,
-        access_level: 3
-    })
-    await admin.save()
 
-    // Create a second test user
-    const hp2 = await bcrypt.hash("user-product", 10)
-    const user = new User({
-        email: "user@product.test",
-        username: "UserProduct",
-        password: hp2
-    })
-    await user.save()
+    const hashedPasswordPromises = [
+        bcrypt.hash("admin-product", 10),
+        bcrypt.hash("user-product", 10)
+    ]
+    const promises = []
 
     // Create dummy products
     const product = new Product({
@@ -40,7 +30,7 @@ beforeAll(async () => {
         price: 10.49,
         stock: 10
     })
-    await product.save()
+    promises.push(product.save())
 
     const product2 = new Product({
         name: "product 2",
@@ -48,7 +38,7 @@ beforeAll(async () => {
         price: 5.73,
         stock: 10
     })
-    await product2.save()
+    promises.push(product2.save())
 
     const product3 = new Product({
         name: "product 3",
@@ -56,21 +46,53 @@ beforeAll(async () => {
         price: 13.21,
         stock: 10
     })
-    await product3.save()
+    promises.push(product3.save())
 
-    products.push(product)
-    products.push(product2)
-    products.push(product3)
+    const hashedPasswords = await Promise.all(hashedPasswordPromises)
+    // Create a test user
+    const admin = new User({
+        email: "admin@product.test",
+        username: "AdminProduct",
+        password: hashedPasswords[0],
+        access_level: 3
+    })
+    promises.push(admin.save())
+
+    // Create a second test user
+    const user = new User({
+        email: "user@product.test",
+        username: "UserProduct",
+        password: hashedPasswords[1],
+    })
+    promises.push(user.save())
+
+    // Wait for all promises to resolve then push products to the products array
+    while (promises.length > 0) {
+        const p = await promises.pop()
+        if (p instanceof Product) {
+            products.push(p)
+        }
+    }
+
+    // Login the test users
+    promises.push(request(app).post("/login").send({ email: "admin@product.test", password: "admin-product"}))
+    promises.push(request(app).post("/login").send({ email: "user@product.test", password: "user-product" }))
+
+    // Wait for all promises to resolve then push sessions to the sessions object
+    while (promises.length > 0) {
+        const res = await promises.pop()
+        expect(res.statusCode).toBe(http.statusOK)
+        sessions[res.body["email"]] = res.headers["authorization"]
+    }
 })
 
 afterAll(async () => {
+    const promises = [User.deleteMany({ email: { $regex: /product.test/ } })]
     // Delete the dummy user and products
-    const user = await User.findOne({ email: "admin@product.test" })
-    await user.delete()
     for (let i = 0; i < products.length; i++) {
-        await products[i].delete()
+        promises.push(products[i].delete())
     }
-    await User.deleteOne({ email: "user@product.test" })
+    await Promise.all(promises) 
     await mongoose.connection.close()
 })
 
@@ -99,13 +121,7 @@ describe("GET /products/:id", () => {
 
 describe("POST /products", () => {
     test("users with access level 2 or higher should create a product", async () => {
-        const u = await request(app).post("/login").send({
-            email: "admin@product.test",
-            password: "admin-product"
-        })
-        expect(u.statusCode).toBe(http.statusOK)
-
-        const res = await request(app).post("/products").set({"Authorization": u.headers["authorization"]}).send({
+        const res = await request(app).post("/products").set({"Authorization": sessions["admin@product.test"]}).send({
             name: "product 4",
             description: "this is product 4",
             price: 20,
@@ -129,13 +145,7 @@ describe("POST /products", () => {
     })
 
     test("unauthorized user should fail to create a product", async () => {
-        const u = await request(app).post("/login").send({
-            email: "user@product.test",
-            password: "user-product"
-        })
-        expect(u.statusCode).toBe(http.statusOK)
-
-        const res = await request(app).post("/products").set({ "Authorization": u.headers["authorization"] }).send({
+        const res = await request(app).post("/products").set({ "Authorization": sessions["user@product.test"] }).send({
             name: "product 4",
             description: "this is product 4",
             price: 20,
@@ -146,13 +156,7 @@ describe("POST /products", () => {
     })
 
     test("product name should be at least 5 characters long", async () => {
-        const u = await request(app).post("/login").send({
-            email: "admin@product.test",
-            password: "admin-product"
-        })
-        expect(u.statusCode).toBe(http.statusOK)
-
-        const res = await request(app).post("/products").set({ "Authorization": u.headers["authorization"] }).send({
+        const res = await request(app).post("/products").set({ "Authorization": sessions["admin@product.test"] }).send({
             name: "123",
             description: "this is product 4",
             price: 20,
@@ -163,13 +167,7 @@ describe("POST /products", () => {
     })
 
     test("product price should not be negative", async () => {
-        const u = await request(app).post("/login").send({
-            email: "admin@product.test",
-            password: "admin-product"
-        })
-        expect(u.statusCode).toBe(http.statusOK)
-
-        const res = await request(app).post("/products").set({ "Authorization": u.headers["authorization"] }).send({
+        const res = await request(app).post("/products").set({ "Authorization": sessions["admin@product.test"] }).send({
             name: "product 4",
             description: "this is product 4",
             price: -1,
@@ -180,13 +178,7 @@ describe("POST /products", () => {
     })
 
     test("product stock should be at least 1 or more", async () => {
-        const u = await request(app).post("/login").send({
-            email: "admin@product.test",
-            password: "admin-product"
-        })
-        expect(u.statusCode).toBe(http.statusOK)
-
-        const res = await request(app).post("/products").set({ "Authorization": u.headers["authorization"] }).send({
+        const res = await request(app).post("/products").set({ "Authorization": sessions["admin@product.test"] }).send({
             name: "product 4",
             description: "this is product 4",
             price: 20,
@@ -199,14 +191,8 @@ describe("POST /products", () => {
 
 describe("PUT /products/:id", () => {
     test("authorized user should successfully update a product", async () => {
-        const u = await request(app).post("/login").send({
-            email: "admin@product.test",
-            password: "admin-product"
-        })
-        expect(u.statusCode).toBe(http.statusOK)
-
         const product = await Product.findOne({ name: "product 1" })
-        const res = await request(app).put(`/products/${product._id}`).set({ "Authorization": u.headers["authorization"] }).send({
+        const res = await request(app).put(`/products/${product._id}`).set({ "Authorization": sessions["admin@product.test"] }).send({
             name: "updated product 1",
             description: "updated description",
             price: 20.59,
@@ -218,14 +204,8 @@ describe("PUT /products/:id", () => {
     })
 
     test("unauthorized user should fail to update a product", async () => {
-        const u = await request(app).post("/login").send({
-            email: "user@product.test",
-            password: "user-product"
-        })
-        expect(u.statusCode).toBe(http.statusOK)
-
         const product = await Product.findOne({ name: "product 2" })
-        const res = await request(app).put(`/products/${product._id}`).set({ "Authorization": u.headers["authorization"]}).send({
+        const res = await request(app).put(`/products/${product._id}`).set({ "Authorization": sessions["user@product.test"] }).send({
             name: "updated product 2",
             description: "updated description",
             price: 20.59,
@@ -237,14 +217,8 @@ describe("PUT /products/:id", () => {
     })
 
     test("product name should be at least 5 characters long", async () => {
-        const u = await request(app).post("/login").send({
-            email: "admin@product.test",
-            password: "admin-product"
-        })
-        expect(u.statusCode).toBe(http.statusOK)
-
         const product = await Product.findOne({ name: "product 2" })
-        const res = await request(app).put(`/products/${product._id}`).set({ "Authorization": u.headers["authorization"] }).send({
+        const res = await request(app).put(`/products/${product._id}`).set({ "Authorization": sessions["admin@product.test"] }).send({
             name: "123",
             description: "updated description",
             price: 20.59,
@@ -256,14 +230,8 @@ describe("PUT /products/:id", () => {
     })
 
     test("product price should not be negative", async () => {
-        const u = await request(app).post("/login").send({
-            email: "admin@product.test",
-            password: "admin-product"
-        })
-        expect(u.statusCode).toBe(http.statusOK)
-
         const product = await Product.findOne({ name: "product 2" })
-        const res = await request(app).put(`/products/${product._id}`).set({ "Authorization": u.headers["authorization"] }).send({
+        const res = await request(app).put(`/products/${product._id}`).set({ "Authorization": sessions["admin@product.test"] }).send({
             name: "12345",
             description: "updated description",
             price: -5,
@@ -275,14 +243,8 @@ describe("PUT /products/:id", () => {
     })
 
     test("product stock should be at least 1 or more", async () => {
-        const u = await request(app).post("/login").send({
-            email: "admin@product.test",
-            password: "admin-product"
-        })
-        expect(u.statusCode).toBe(http.statusOK)
-
         const product = await Product.findOne({ name: "product 2" })
-        const res = await request(app).put(`/products/${product._id}`).set({ "Authorization": u.headers["authorization"] }).send({
+        const res = await request(app).put(`/products/${product._id}`).set({ "Authorization": sessions["admin@product.test"] }).send({
             name: "12345",
             description: "updated description",
             price: 25,
@@ -294,14 +256,8 @@ describe("PUT /products/:id", () => {
     })
 
     test("should not find product", async () => {
-        const u = await request(app).post("/login").send({
-            email: "admin@product.test",
-            password: "admin-product"
-        })
-        expect(u.statusCode).toBe(http.statusOK)
-
         const id = mongoose.Types.ObjectId()
-        const res = await request(app).put(`/products/${id}`).set({ "Authorization": u.headers["authorization"] }).send({
+        const res = await request(app).put(`/products/${id}`).set({ "Authorization": sessions["admin@product.test"] }).send({
             name: "12345",
             description: "updated description",
             price: 20.59,
@@ -315,39 +271,21 @@ describe("PUT /products/:id", () => {
 
 describe("DELETE /products/:id", () => {
     test("authorized user should delete product", async () => {
-        const u = await request(app).post("/login").send({
-            email: "admin@product.test",
-            password: "admin-product"
-        })
-        expect(u.statusCode).toBe(http.statusOK)
-        
         const product = await Product.findOne({ name: "product 3" })
-        const res = await request(app).delete(`/products/${product._id}`).set({ "Authorization": u.headers["authorization"] })
+        const res = await request(app).delete(`/products/${product._id}`).set({ "Authorization": sessions["admin@product.test"] })
         expect(res.statusCode).toBe(http.statusOK)
         expect(await Product.findOne({ _id: product._id })).toBeNull()
     })
 
     test("unauthorized user should fail to delete product", async () => {
-        const u = await request(app).post("/login").send({
-            email: "user@product.test",
-            password: "user-product"
-        })
-        expect(u.statusCode).toBe(http.statusOK)
-
         const product = await Product.findOne({ name: "product 2" })
-        const res = await request(app).delete(`/products/${product._id}`).set({ "Authorization": u.headers["authorization"] })
+        const res = await request(app).delete(`/products/${product._id}`).set({ "Authorization": sessions["user@product.test"] })
         expect(res.statusCode).toBe(http.statusForbidden)
     })
 
     test("should not find product to delete", async () => {
-        const u = await request(app).post("/login").send({
-            email: "admin@product.test",
-            password: "admin-product"
-        })
-        expect(u.statusCode).toBe(http.statusOK)
-
         const id = mongoose.Types.ObjectId()
-        const res = await request(app).delete(`/products/${id}`).set({ "Authorization": u.headers["authorization"] })
+        const res = await request(app).delete(`/products/${id}`).set({ "Authorization": sessions["admin@product.test"] })
         expect(res.statusCode).toBe(http.statusNotFound)
     })
 })

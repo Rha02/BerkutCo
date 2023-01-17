@@ -27,6 +27,16 @@ const productSchema = {
             errorMessage: 'Stock must be at least 1 or more',
             options: { min: 1 }
         }
+    },
+    image: {
+        custom: {
+            options: (value, { req }) => {
+                if (req.file) {
+                    return req.file.mimetype.startsWith('image/')
+                }
+                return true
+            }
+        }
     }
 }
 
