@@ -8,6 +8,8 @@ app.use(cors())
 app.use(express.static("public"))
 app.use(express.json())
 
+app.set("test", "testing!!")
+
 // Routes
 const router = require("./routes/router.js")
 app.use("/", router)

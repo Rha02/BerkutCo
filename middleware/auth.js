@@ -1,6 +1,5 @@
-const jwt = require('jsonwebtoken');
-const User = require('../models/user');
 const http = require('../utils/http');
+const redisClient = require('../db/init_redis');
 
 const requiresAuthentication = async (req, res, next) => {
     try {
@@ -8,12 +7,12 @@ const requiresAuthentication = async (req, res, next) => {
         if (!token) {
             return res.status(http.statusUnauthorized).send({ errors: [{ msg: "Unauthenticated" }] });
         }
-        const decoded = jwt.verify(token, process.env.SECRET_TOKEN);
-        const user = await User.findOne({ _id: decoded._id });
 
-        if (!user) {
+        const res = await redisClient.get(token);
+        if (!res) {
             return res.status(http.statusUnauthorized).send({ errors: [{ msg: "Invalid authentication token" }] });
         }
+        const user = JSON.parse(res);
 
         req.user = user;
         next();

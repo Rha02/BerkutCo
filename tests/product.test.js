@@ -5,6 +5,7 @@ const mongoose = require('mongoose')
 const request = require('supertest')
 const http = require('../utils/http')
 const bcrypt = require('bcrypt')
+const redisClient = require('../db/init_redis')
 
 const products = []
 const sessions = {}
@@ -94,6 +95,7 @@ afterAll(async () => {
     }
     await Promise.all(promises) 
     await mongoose.connection.close()
+    await redisClient.quit()
 })
 
 describe("GET /products", () => {

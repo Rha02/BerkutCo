@@ -4,6 +4,7 @@ const mongoose = require('mongoose')
 const bcrypt = require('bcrypt')
 const request = require('supertest')
 const http = require('../utils/http')
+const redisClient = require('../db/init_redis')
 
 beforeAll(async () => {
     await mongoose.connect(process.env.TEST_DATABASE_URL)
@@ -28,6 +29,7 @@ afterAll(async () => {
     await User.deleteOne({ email: "fake@email.test" })
 
     await mongoose.connection.close()
+    await redisClient.quit()
 })
 
 describe("POST /login", () => {
