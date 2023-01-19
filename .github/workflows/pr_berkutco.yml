@@ -16,10 +16,20 @@ jobs:
         with:
           node-version: '18.x'
       
+      - name: Start MongoDB
+        uses: supercharge/mongodb-github-action@1.8.0
+        with: 
+          mongodb-version: 5.0.2
+      
+      # start Redis
+      - name: Start Redis
+        uses: supercharge/redis-github-action@1.4.0
+        with:
+          redis-version: 6.2.5
+      
       - name: npm install and test
         env:
-          TEST_DATABASE_URL: ${{ secrets.TEST_DATABASE_URL }}
           SECRET_TOKEN: ${{ secrets.SECRET_TOKEN }}
         run: |
           npm ci
-          npm run test --if-present
+          npm run test
