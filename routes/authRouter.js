@@ -33,13 +33,26 @@ router.post("/login", checkSchema(loginSchema), async (req, res) => {
                 errors: [{ msg: "Invalid password" }]
             })
         }
+
+        // check if redis has a token for this user
+        const redisClient = req.app.get("redisClient")
+        const redisToken = await redisClient.get(user._id.toString())
+        if (redisToken) {
+            return res.setHeader("Authorization", redisToken).json(user)
+        }
         
         const token = jwt.sign({ _id: user._id }, process.env.SECRET_TOKEN, { expiresIn: '7d' })
+        
+        // store the token in redis
+        // time to live is 7 days
+        await redisClient.set(user._id.toString(), token, 'EX', 60 * 60 * 24 * 7)
+        await redisClient.set(token, JSON.stringify(user), 'EX', 60 * 60 * 24 * 7)
 
         // hide the password field
         user.password = undefined
         res.setHeader("Authorization", token).json(user)
     } catch(err) {
+        console.log(err)
         res.status(http.statusInternalServerError).json({
             errors: [{ msg: "Unexpected error encountered" }]
         })

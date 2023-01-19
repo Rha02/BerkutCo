@@ -1,20 +1,25 @@
-const app = require('../app')
+const app = require('../app_test')
 const User = require('../models/user')
 const Product = require('../models/product')
 const mongoose = require('mongoose')
 const request = require('supertest')
 const http = require('../utils/http')
 const bcrypt = require('bcrypt')
+const redis = require('redis')
 
 const products = []
 const sessions = {}
 
 beforeAll(async () => {
-    await mongoose.connect(process.env.TEST_DATABASE_URL)
+    await mongoose.connect("mongodb://localhost:27017")
         .catch(err => {
             console.error(`Error connecting to MongoDB: ${err}`)
             process.exitCode = 1
         })
+    
+    const redisClient = redis.createClient()
+    await redisClient.connect()
+    app.set("redisClient", redisClient)
     
     const hashedPasswordPromises = [
         bcrypt.hash("user-cart", 10),
@@ -115,6 +120,7 @@ afterAll(async () => {
     await Promise.all(promises)
 
     await mongoose.connection.close()
+    await app.get("redisClient").quit()
 })
 
 describe("GET /cart/:user_id", () => {
