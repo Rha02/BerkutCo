@@ -7,7 +7,6 @@ const { validationResult, checkSchema } = require("express-validator")
 const {loginSchema, registerSchema} = require('../validation/authSchema')
 const http = require("../utils/http")
 const { requiresAuthentication } = require("../middleware/auth")
-const redisClient = require("../db/init_redis")
 
 // Login a user on a POST request to "/login"
 router.post("/login", checkSchema(loginSchema), async (req, res) => {
@@ -36,9 +35,9 @@ router.post("/login", checkSchema(loginSchema), async (req, res) => {
         }
 
         // check if redis has a token for this user
+        const redisClient = req.app.get("redisClient")
         const redisToken = await redisClient.get(user._id.toString())
         if (redisToken) {
-            console.log(redisToken)
             return res.setHeader("Authorization", redisToken).json(user)
         }
         

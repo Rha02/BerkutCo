@@ -1,5 +1,4 @@
 const http = require('../utils/http');
-const redisClient = require('../db/init_redis');
 
 const requiresAuthentication = async (req, res, next) => {
     try {
@@ -8,6 +7,7 @@ const requiresAuthentication = async (req, res, next) => {
             return res.status(http.statusUnauthorized).send({ errors: [{ msg: "Unauthenticated" }] });
         }
 
+        const redisClient = req.app.get('redisClient');
         const res = await redisClient.get(token);
         if (!res) {
             return res.status(http.statusUnauthorized).send({ errors: [{ msg: "Invalid authentication token" }] });

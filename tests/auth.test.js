@@ -1,10 +1,10 @@
-const app = require('../app')
+const app = require('../app_test')
 const User = require('../models/user')
 const mongoose = require('mongoose')
 const bcrypt = require('bcrypt')
 const request = require('supertest')
 const http = require('../utils/http')
-const redisClient = require('../db/init_redis')
+const redis = require('redis')
 
 beforeAll(async () => {
     await mongoose.connect(process.env.TEST_DATABASE_URL)
@@ -12,6 +12,10 @@ beforeAll(async () => {
             console.error(`Error connecting to MongoDB: ${err}`)
             process.exitCode = 1
         })
+    const redisClient = redis.createClient()
+    await redisClient.connect()
+    app.set("redisClient", redisClient)
+
     // Create a test user
     const hashedPassword = await bcrypt.hash("fake-password", 10)
     const user = new User({
@@ -29,7 +33,7 @@ afterAll(async () => {
     await User.deleteOne({ email: "fake@email.test" })
 
     await mongoose.connection.close()
-    await redisClient.quit()
+    await app.get("redisClient").quit()
 })
 
 describe("POST /login", () => {
