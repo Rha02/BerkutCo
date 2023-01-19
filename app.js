@@ -7,7 +7,10 @@ const mongoose = require('mongoose')
 require("dotenv/config")
 
 // Connect to Redis
-const redisClient = redis.createClient()
+const redisClient = redis.createClient({
+    url: `redis://${process.env.REDIS_HOST}:${process.env.REDIS_PORT}`,
+    password: process.env.REDIS_KEY
+})
 redisClient.on("error", err => {
     console.error(`Error connecting to Redis: ${err}`)
     process.exitCode = 1
