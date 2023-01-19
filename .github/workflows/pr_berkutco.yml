@@ -21,7 +21,6 @@ jobs:
         with: 
           mongodb-version: 5.0.2
       
-      # start Redis
       - name: Start Redis
         uses: supercharge/redis-github-action@1.4.0
         with:
