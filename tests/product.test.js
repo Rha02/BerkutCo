@@ -12,7 +12,7 @@ const sessions = {}
 
 
 beforeAll(async () => {
-    await mongoose.connect(process.env.TEST_DATABASE_URL, { serverSelectionTimeoutMS: 2500 })
+    await mongoose.connect("mongodb://localhost:27017")
         .catch(err => {
             console.error(`Error connecting to MongoDB: ${err}`)
             process.exitCode = 1
