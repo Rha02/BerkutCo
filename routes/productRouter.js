@@ -8,16 +8,10 @@ const http = require('../utils/http')
 const multer = require('multer')
 const inMemoryStorage = multer.memoryStorage()
 const uploadStrategy = multer({ storage: inMemoryStorage }).single('image')
-const { BlockBlobClient } = require('@azure/storage-blob')
 
-const crypto = require('crypto')
+const fileStorageService = require('../services/FileStorageService')
+
 const {requiresAuthentication, requiresAdmin} = require('../middleware/auth')
-
-// createImageName() creates a unique name for the image file
-const createImageName = (image_name) => {
-    const extension = image_name.split('.').pop()
-    return crypto.randomUUID() + '.' + extension
-}
 
 // Handle requests to "/products"
 router.route('/')
@@ -30,7 +24,7 @@ router.route('/')
             products = await Product.find().sort({ createdAt: -1 }).skip(skip).limit(limit).lean()
 
             for (let i = 0; i < products.length; i++) {
-                products[i].image_url = `https://${process.env.AZURE_STORAGE_ACCOUNT_NAME}.blob.core.windows.net/images/${products[i].image_name}`
+                products[i].image_url = fileStorageService.getImageURL(products[i].image_name)
             }
 
             res.json(products)
@@ -56,20 +50,12 @@ router.route('/')
                 stock: req.body.stock
             })
 
-            const image_name = req.file ? createImageName(req.file.originalname) : null
-            
             if (req.file) {
-                const blobClient = new BlockBlobClient(
-                    process.env.AZURE_STORAGE_CONNECTION_STRING, 
-                    "images", 
-                    image_name)
-                await blobClient.uploadData(req.file.buffer)
-                await blobClient.setHTTPHeaders({ blobContentType: `${req.file.mimetype}` })
-                product.image_name = image_name
+                product.image_name = await fileStorageService.uploadImage(req.file)
             }
 
             const savedProduct = await product.save() 
-            savedProduct.set('image_url', `https://${process.env.AZURE_STORAGE_ACCOUNT_NAME}.blob.core.windows.net/images/${savedProduct.image_name}`, { strict: false })
+            savedProduct.set('image_url', fileStorageService.getImageURL(savedProduct.image_name), { strict: false })
             res.status(http.statusCreated).json(savedProduct)
         } catch (err) {
             res.status(http.statusInternalServerError).json({
@@ -89,7 +75,7 @@ router.route('/:id')
                     errors: [{ msg: "Product not found" }]
                 })
             }
-            product.image_url = `https://${process.env.AZURE_STORAGE_ACCOUNT_NAME}.blob.core.windows.net/images/${product.image_name}`
+            product.image_url = fileStorageService.getImageURL(product.image_name)
             return res.json(product)
         } catch (err) {
             return res.status(http.statusInternalServerError).json({
@@ -122,24 +108,20 @@ router.route('/:id')
             }
 
             if (req.file) {
-                const image_name = createImageName(req.file.originalname)
-                const blobClient = new BlockBlobClient(process.env.AZURE_STORAGE_CONNECTION_STRING, "images", image_name)
-                await blobClient.uploadData(req.file.buffer)
-                await blobClient.setHTTPHeaders({ blobContentType: `${req.file.mimetype}` })
-                updatedProduct.image_name = image_name
-                
                 // delete old image if it is not the default image
                 if (product.image_name !== "default.png") {
-                    const oldBlobClient = new BlockBlobClient(process.env.AZURE_STORAGE_CONNECTION_STRING, "images", product.image_name)
-                    await oldBlobClient.deleteIfExists()
+                    await fileStorageService.deleteImage(product.image_name)
                 }
+
+                // upload new image
+                updatedProduct.image_name = await fileStorageService.uploadImage(req.file)
             }
 
             await Product.updateOne({ _id: product.id }, {
                 $set: updatedProduct
             })
 
-            updatedProduct.image_url = `https://${process.env.AZURE_STORAGE_ACCOUNT_NAME}.blob.core.windows.net/images/${updatedProduct.image_name}`
+            updatedProduct.image_url = fileStorageService.getImageURL(updatedProduct.image_name)
 
             return res.status(http.statusOK).json(updatedProduct)
         } catch (err) {
@@ -161,8 +143,7 @@ router.route('/:id')
 
             // delete image if it is not the default image
             if (product.image_name !== "default.png") {
-                const blobClient = new BlockBlobClient(process.env.AZURE_STORAGE_CONNECTION_STRING, "images", product.image_name)
-                await blobClient.deleteIfExists()
+                await fileStorageService.deleteImage(product.image_name)
             }
 
             await Product.deleteOne({ _id: product._id })

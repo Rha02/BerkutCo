@@ -34,6 +34,9 @@ router.post("/login", checkSchema(loginSchema), async (req, res) => {
             })
         }
 
+        // hide the password field
+        user.password = undefined
+
         // check if redis has a token for this user
         const redisClient = req.app.get("redisClient")
         const redisToken = await redisClient.get(user._id.toString())
@@ -48,8 +51,6 @@ router.post("/login", checkSchema(loginSchema), async (req, res) => {
         await redisClient.set(user._id.toString(), token, 'EX', 60 * 60 * 24 * 7)
         await redisClient.set(token, JSON.stringify(user), 'EX', 60 * 60 * 24 * 7)
 
-        // hide the password field
-        user.password = undefined
         res.setHeader("Authorization", token).json(user)
     } catch(err) {
         console.log(err)
