@@ -1,7 +1,5 @@
 const mongoose = require('mongoose')
 
-/**cartProductSchema defines a subschema for products that are stored in cart */
-
 /**userSchema defines a schema for the User model*/
 const userSchema = mongoose.Schema({
     email: {

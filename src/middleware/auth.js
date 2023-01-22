@@ -1,5 +1,9 @@
 const http = require('../utils/http');
 
+/**
+ * requiresAuthentication is a middleware function that checks if the request has a valid authentication token
+ * then uses it to fetch user data from Redis and attach it to the request object
+ */
 const requiresAuthentication = async (req, res, next) => {
     try {
         const token = req.header('Authorization');
@@ -21,6 +25,10 @@ const requiresAuthentication = async (req, res, next) => {
     }
 }
 
+/**
+ * requiresAdmin is a middleware function that checks if the user has admin access.
+ * Admin access is defined as `access_level` >= 2
+ */
 const requiresAdmin = async (req, res, next) => {
     if (req.user.access_level < 2) {
         return res.status(http.statusForbidden).json({

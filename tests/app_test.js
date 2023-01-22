@@ -9,7 +9,7 @@ app.use(express.static("public"))
 app.use(express.json())
 
 // Routes
-const router = require("./routes/router.js")
+const router = require("../src/routes/router.js")
 app.use("/", router)
 
 module.exports = app

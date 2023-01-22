@@ -1,9 +1,9 @@
-const app = require('../app_test')
-const User = require('../models/user')
-const Product = require('../models/product')
+const app = require('./app_test')
+const User = require('../src/models/user')
+const Product = require('../src/models/product')
 const mongoose = require('mongoose')
 const request = require('supertest')
-const http = require('../utils/http')
+const http = require('../src/utils/http')
 const bcrypt = require('bcrypt')
 const redis = require('redis')
 
