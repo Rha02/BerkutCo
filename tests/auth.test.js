@@ -1,9 +1,9 @@
-const app = require('../app_test')
-const User = require('../models/user')
+const app = require('./app_test')
+const User = require('../src/models/user')
 const mongoose = require('mongoose')
 const bcrypt = require('bcrypt')
 const request = require('supertest')
-const http = require('../utils/http')
+const http = require('../src/utils/http')
 const redis = require('redis')
 
 beforeAll(async () => {
