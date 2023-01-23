@@ -5,7 +5,7 @@ const mongoose = require('mongoose')
 const request = require('supertest')
 const http = require('../src/utils/http')
 const bcrypt = require('bcrypt')
-const redis = require('redis')
+const cacheService = require('../src/services/CacheService')
 
 const products = []
 const sessions = {}
@@ -18,9 +18,14 @@ beforeAll(async () => {
             process.exitCode = 1
         })
 
-    const redisClient = redis.createClient()
-    await redisClient.connect()
-    app.set("redisClient", redisClient)
+    // Connect to Redis
+    await cacheService.connect({
+        host: "localhost",
+        port: 6379
+    }).catch(err => {
+        console.error(`Error connecting to Redis: ${err}`)
+        process.exitCode = 1
+    })
 
     const hashedPasswordPromises = [
         bcrypt.hash("admin-product", 10),
@@ -99,7 +104,7 @@ afterAll(async () => {
     }
     await Promise.all(promises) 
     await mongoose.connection.close()
-    await app.get('redisClient').quit()
+    await cacheService.disconnect()
 })
 
 describe("GET /products", () => {

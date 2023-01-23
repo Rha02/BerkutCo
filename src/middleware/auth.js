@@ -1,4 +1,5 @@
 const http = require('../utils/http');
+const cacheService = require('../services/CacheService');
 
 /**
  * requiresAuthentication is a middleware function that checks if the request has a valid authentication token
@@ -11,8 +12,7 @@ const requiresAuthentication = async (req, res, next) => {
             return res.status(http.statusUnauthorized).send({ errors: [{ msg: "Unauthenticated" }] });
         }
 
-        const redisClient = req.app.get('redisClient');
-        const res = await redisClient.get(token);
+        const res = await cacheService.getAuthUser(token);
         if (!res) {
             return res.status(http.statusUnauthorized).send({ errors: [{ msg: "Invalid authentication token" }] });
         }
