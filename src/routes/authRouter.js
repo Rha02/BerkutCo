@@ -8,6 +8,7 @@ const {loginSchema, registerSchema} = require('../validation/authSchema')
 const cacheService = require("../services/CacheService")
 const http = require("../utils/http")
 const { requiresAuthentication } = require("../middleware/auth")
+const config = require("../../config")
 
 // Login a user on a POST request to "/login"
 router.post("/login", checkSchema(loginSchema), async (req, res) => {
@@ -44,8 +45,8 @@ router.post("/login", checkSchema(loginSchema), async (req, res) => {
             return res.setHeader("Authorization", redisToken).json(user)
         }
         
-        const token = jwt.sign({ _id: user._id }, process.env.SECRET_TOKEN, { expiresIn: '7d' })
-        await cacheService.saveAuthUser(token, user)
+        const token = jwt.sign({ _id: user._id }, process.env.SECRET_TOKEN, { expiresIn: config.AUTH_TOKEN_TTL })
+        await cacheService.saveAuthUser(token, user, config.AUTH_TOKEN_TTL)
 
         res.setHeader("Authorization", token).json(user)
     } catch(err) {

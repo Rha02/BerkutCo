@@ -16,11 +16,10 @@ let redisClient = null;
  */
 const connect = (options) => {
     // create a new redis client with timout set to 1 second
-    redisClient = redis.createClient({
-        host: options.host,
-        port: options.port,
-        password: options.password
-    })
+    redisClient = redis.createClient(
+        `redis://${options.host}:${options.port}`, 
+        { password: options.password, connect_timeout: 1000 }
+    )
     return redisClient.connect()
 }
 
@@ -60,13 +59,14 @@ module.exports = {
     /**
      * saveAuthUser() saves the user data for a user to redis
      * @param {String} token
-     * @param {Object} user
+     * @param {Object} user the user data to save. Must contain the _id property
+     * @param {Number} expiresIn the number of seconds the token will expire in. Default is 12 hours
      * @returns {Promise} Promise object represents the user data for the user
      */
-    saveAuthUser: async (token, user) => {
+    saveAuthUser: async (token, user, expiresIn = 60 * 60 * 12) => {
         return Promise.all([
-            redisClient.set(token, JSON.stringify(user), 'EX', 60 * 60 * 24 * 7),
-            redisClient.set(user._id.toString(), token, 'EX', 60 * 60 * 24 * 7)
+            redisClient.set(token, JSON.stringify(user), 'EX', expiresIn),
+            redisClient.set(user._id.toString(), token, 'EX', expiresIn)
         ]).catch((err) => {
             console.log(err)
         })
