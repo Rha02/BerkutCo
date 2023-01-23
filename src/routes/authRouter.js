@@ -5,8 +5,10 @@ const bcrypt = require("bcrypt")
 const jwt = require('jsonwebtoken')
 const { validationResult, checkSchema } = require("express-validator")
 const {loginSchema, registerSchema} = require('../validation/authSchema')
+const cacheService = require("../services/CacheService")
 const http = require("../utils/http")
 const { requiresAuthentication } = require("../middleware/auth")
+const config = require("../../config")
 
 // Login a user on a POST request to "/login"
 router.post("/login", checkSchema(loginSchema), async (req, res) => {
@@ -38,18 +40,13 @@ router.post("/login", checkSchema(loginSchema), async (req, res) => {
         user.password = undefined
 
         // check if redis has a token for this user
-        const redisClient = req.app.get("redisClient")
-        const redisToken = await redisClient.get(user._id.toString())
+        const redisToken = await cacheService.getAuthToken(user._id.toString())
         if (redisToken) {
             return res.setHeader("Authorization", redisToken).json(user)
         }
         
-        const token = jwt.sign({ _id: user._id }, process.env.SECRET_TOKEN, { expiresIn: '7d' })
-        
-        // store the token in redis
-        // time to live is 7 days
-        await redisClient.set(user._id.toString(), token, 'EX', 60 * 60 * 24 * 7)
-        await redisClient.set(token, JSON.stringify(user), 'EX', 60 * 60 * 24 * 7)
+        const token = jwt.sign({ _id: user._id }, process.env.SECRET_TOKEN, { expiresIn: config.AUTH_TOKEN_TTL })
+        await cacheService.saveAuthUser(token, user, config.AUTH_TOKEN_TTL)
 
         res.setHeader("Authorization", token).json(user)
     } catch(err) {
@@ -106,6 +103,11 @@ router.get("/checkauth", requiresAuthentication, async (req, res) => {
     const user = req.user
     user.password = undefined
     return res.json(user)
+})
+
+// Logout a user on a POST request to "/logout"
+router.post("/logout", requiresAuthentication, async (req, res) => {
+    return res.status(http.statusNotImplemented).json({ msg: "This resource has not been implemented yet." })
 })
 
 module.exports = router

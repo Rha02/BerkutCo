@@ -1,32 +1,29 @@
 const express = require("express")
 const app = express()
 const cors = require('cors')
-const redis = require("redis")
 const mongoose = require('mongoose')
+const cacheService = require("./src/services/CacheService")
 
 require("dotenv/config")
 
 // Connect to Redis
-const redisClient = redis.createClient({
-    url: `redis://${process.env.REDIS_HOST}:${process.env.REDIS_PORT}`,
+cacheService.connect({
+    host: process.env.REDIS_HOST,
+    port: process.env.REDIS_PORT,
     password: process.env.REDIS_KEY
-})
-redisClient.on("error", err => {
+}).then(() => {
+    console.log("Connected to Redis")
+}).catch(err => {
     console.error(`Error connecting to Redis: ${err}`)
     process.exitCode = 1
-}).on("connect", () => {
-    console.log("Connected to Redis")
 })
-redisClient.connect()
-
-app.set("redisClient", redisClient)
 
 app.use(cors())
 app.use(express.static("public"))
 app.use(express.json())
 
 // Routes
-const router = require("./routes/router.js")
+const router = require("./src/routes/router.js")
 app.use("/", router)
 
 // Connect to DB
@@ -45,6 +42,6 @@ app.listen(process.env.PORT || 3000, () => console.log('Server up and running'))
 process.on('SIGINT', async () => {
     await mongoose.connection.close()
     console.log("Disconnected from MongoDB")
-    await redisClient.quit()
+    await cacheService.disconnect()
     console.log("Disconnected from Redis")
 })

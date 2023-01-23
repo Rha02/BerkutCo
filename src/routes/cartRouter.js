@@ -6,6 +6,7 @@ const { validationResult, checkSchema } = require("express-validator")
 const http = require('../utils/http')
 const cartSchema = require('../validation/cartSchema')
 const { requiresAuthentication } = require('../middleware/auth')
+const fileStorageService = require('../services/FileStorageService')
 
 // Handle requests to "/cart"
 router.route('/:user_id')
@@ -29,7 +30,7 @@ router.route('/:user_id')
             const products = await Product.find({ _id: { $in: user.cart.map(p => p.product_id) } }).lean()
             for (let i = 0; i < products.length; i++) {
                 products[i].quantity = user.cart[i].quantity
-                products[i].image_url = `https://${process.env.AZURE_STORAGE_ACCOUNT_NAME}.blob.core.windows.net/images/${products[i].image_name}`
+                products[i].image_url = fileStorageService.getImageURL(products[i].image_name)
             }
             res.json(products)
         }
