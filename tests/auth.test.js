@@ -6,6 +6,7 @@ const request = require('supertest')
 const http = require('../src/utils/http')
 const cacheService = require('../src/services/CacheService')
 const config = require('../config')
+const jwt = require('jsonwebtoken')
 
 beforeAll(async () => {
     await mongoose.connect(config.TEST_MONGO_URI)
@@ -194,5 +195,38 @@ describe("GET /checkauth", () => {
             expect(res.statusCode).toBe(http.statusUnauthorized)
             expect(res.body).toHaveProperty("errors")
         })
+    })
+})
+
+describe("POST /logout", () => {
+    test("should successfully logout", async () => {
+        const u = await request(app).post("/login").send({
+            email: "fake@email.test",
+            password: "fake-password"
+        })
+        expect(u.statusCode).toBe(http.statusOK)
+        expect(u.headers["authorization"]).toBeDefined()
+
+        const res = await request(app).post("/logout").set({ "Authorization": u.headers["authorization"] })
+        expect(res.statusCode).toBe(http.statusOK)
+        expect(res.body).toMatchObject({
+            msg: "User logged out successfully"
+        })
+
+        const authSessionExists = await cacheService.checkIfAuthUserExists(u.headers["authorization"], u.body._id)
+        expect(authSessionExists).toBe(false)
+    })
+
+    test("missing authorization token", () => {
+        return request(app).post("/logout").then(res => {
+            expect(res.statusCode).toBe(http.statusUnauthorized)
+            expect(res.body).toHaveProperty("errors")
+        })
+    })
+
+    test("invalid authorization token", async () => {
+        const res = await request(app).post("/logout").set({ "Authorization": "invalid token here" })
+        expect(res.statusCode).toBe(http.statusUnauthorized)
+        expect(res.body).toHaveProperty("errors")
     })
 })
