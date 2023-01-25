@@ -57,6 +57,25 @@ module.exports = {
     },
 
     /**
+     * checkIfAuthUserExists() checks if the auth session exists for a user. 
+     * The auth session exists if the `token` or `userId` keys exists in redis
+     * @param {String} token
+     * @param {String} userId
+     * @returns {Promise} Promise object represents true if the auth session exists, false otherwise
+     * @throws {Error} if there is an error checking if the auth session exists
+     */
+    checkIfAuthUserExists: async (token, userId) => {
+        return Promise.all([
+            redisClient.exists(token),
+            redisClient.exists(userId)
+        ]).then((results) => {
+            return Boolean(results[0] || results[1])
+        }).catch((err) => {
+            console.log(err)
+        })
+    },
+
+    /**
      * saveAuthUser() saves the user data for a user to redis
      * @param {String} token
      * @param {Object} user the user data to save. Must contain the _id property
@@ -75,13 +94,13 @@ module.exports = {
     /**
      * deleteAuthUser() deletes the user data for a user from redis
      * @param {String} token
-     * @param {Object} user
+     * @param {String} userId
      * @returns {Promise} Promise object represents the user data for the user
      */
-    deleteAuthUser: async (token, user) => {
+    deleteAuthUser: async (token, userId) => {
         return Promise.all([
             redisClient.del(token),
-            redisClient.del(user._id.toString())
+            redisClient.del(userId)
         ]).catch((err) => {
             console.log(err)
         })

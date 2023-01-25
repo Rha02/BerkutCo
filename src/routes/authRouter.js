@@ -107,7 +107,9 @@ router.get("/checkauth", requiresAuthentication, async (req, res) => {
 
 // Logout a user on a POST request to "/logout"
 router.post("/logout", requiresAuthentication, async (req, res) => {
-    return res.status(http.statusNotImplemented).json({ msg: "This resource has not been implemented yet." })
+    const user = req.user
+    await cacheService.deleteAuthUser(req.header("Authorization"), user._id)
+    return res.json({ msg: "User logged out successfully" })
 })
 
 module.exports = router
